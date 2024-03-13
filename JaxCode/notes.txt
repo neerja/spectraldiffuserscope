@@ -1,0 +1,6 @@
+
+under recon_materials_organized:
+connie_filter_cube.pt and connie_normalized_filter_cube.pt is the data from Nov 2023 that had the offset issue. 
+This folder was also having permission issues so I created a new folder called Calibration_data to store the new calib data.
+
+filter_cube_Mar2024.npy is with 8 nm FWHM from 370nm to 890 nm with 2nm steps. 
