@@ -1,0 +1,119 @@
+{
+    "os": "Linux-5.4.0-173-generic-x86_64-with-glibc2.31",
+    "python": "3.10.6",
+    "heartbeatAt": "2024-03-13T23:43:26.194087",
+    "startedAt": "2024-03-13T23:43:25.745950",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "<python with no main file>",
+    "codePathLocal": null,
+    "git": {
+        "remote": "git@github.com:neerja/spectraldiffuserscope.git",
+        "commit": "b24ce2276669683868fa96910d73e84a60945a6a"
+    },
+    "email": "neerja.aggarwal42@gmail.com",
+    "root": "/home/neerja/CODE/SpectralDiffuserScopeGitRepo",
+    "host": "waller-fuoco",
+    "username": "neerja",
+    "executable": "/home/neerja/anaconda3/envs/specscope_jax/bin/python",
+    "cpu_count": 6,
+    "cpu_count_logical": 12,
+    "cpu_freq": {
+        "current": 2049.1901666666668,
+        "min": 1200.0,
+        "max": 4000.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 1199.924,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 2369.843,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3997.75,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 1224.132,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 1502.258,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 1908.219,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 1199.481,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 2586.132,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3997.961,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 1223.885,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 1317.897,
+            "min": 1200.0,
+            "max": 4000.0
+        },
+        {
+            "current": 2062.8,
+            "min": 1200.0,
+            "max": 4000.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 915.3223114013672,
+            "used": 94.54462814331055
+        }
+    },
+    "gpu": "NVIDIA RTX A6000",
+    "gpu_count": 4,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA RTX A6000",
+            "memory_total": 51527024640
+        },
+        {
+            "name": "NVIDIA TITAN Xp",
+            "memory_total": 12884901888
+        },
+        {
+            "name": "NVIDIA TITAN Xp",
+            "memory_total": 12884901888
+        },
+        {
+            "name": "NVIDIA GeForce RTX 3090",
+            "memory_total": 25769803776
+        }
+    ],
+    "memory": {
+        "total": 62.7130241394043
+    }
+}

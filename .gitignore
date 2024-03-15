@@ -1,0 +1,11 @@
+#ignore ALL files located in these directories
+Calibration_Files/
+Results/
+.ipynb_checkpoints
+/JaxCode/Calibration_data
+/JaxCode/Results
+/JaxCode/wandb
+/JaxCode/recon_materials_organized
+/JaxCode/Figure_Notebooks/Figures
+*.pyc
+*.pt
