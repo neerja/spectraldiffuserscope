@@ -5,6 +5,7 @@ Results/
 /JaxCode/Calibration_data
 /JaxCode/Results
 /JaxCode/wandb
+/JaxCode/Reconstruction Notebooks/wandb
 /JaxCode/recon_materials_organized
 /JaxCode/Figure_Notebooks/Figures
 *.pyc
