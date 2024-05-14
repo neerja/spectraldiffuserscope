@@ -133,13 +133,6 @@ def forwardmodel3d(x,hfftpad,m):
     y = torch.sum(y,dim=0)  # integrate of spectral dimension
     return y
 
-def forwardmodel3d(x,hfftpad,m):
-    xfftpad = torch.fft.fft2(pad(x)) # get fft of padded object
-    y = (torch.fft.ifftshift(torch.fft.ifft2(hfftpad*xfftpad), dim=(-1,-2))).real # do convolution
-    y = crop(y, m.shape[1:]) * m # apply spectral filter
-    y = torch.sum(y,dim=0)  # integrate of spectral dimension
-    return y
-
 def adjointoperation(y,hfftpad,m): 
     y = y * m # this repeats Y and applies the hyper spectral filter
     ypad = pad(y) # zero pad by .5 on each side
