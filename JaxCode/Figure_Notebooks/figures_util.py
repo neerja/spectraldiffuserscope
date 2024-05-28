@@ -62,7 +62,7 @@ def findbeadsinimage(false_color, beadsize=15, skip = [-1], maxnum = 10, label_b
     return (bead_locations[:maxnum], np.array(cv2.cvtColor(image_array_bgr, cv2.COLOR_BGR2RGB))/255)
 
 
-def drawscalebar(ax, scalebarval, pxlsize, mag = 1, scalebarname = '1 superpixel', loc = 'upper left'):
+def drawscalebar(ax, scalebarval, pxlsize, mag = 1, scalebarname = '1 superpixel', loc = 'upper left', size_vertical = 10):
     scalebarsize = scalebarval*mag # micron
     scalepix = int(scalebarsize/pxlsize)
 
@@ -72,7 +72,7 @@ def drawscalebar(ax, scalebarval, pxlsize, mag = 1, scalebarname = '1 superpixel
                             pad=0.5, sep = 10,
                             color='white',
                             frameon=False,
-                            size_vertical=10,
+                            size_vertical=size_vertical,
                             fontproperties=fontprops)
     return scalebar
 
