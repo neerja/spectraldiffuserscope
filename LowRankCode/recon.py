@@ -7,6 +7,7 @@ import os
 import wandb
 import sys
 from tqdm import tqdm
+import pickle
 
 
 # %%
@@ -63,6 +64,7 @@ if __name__ == "__main__":
 
     test = jnp.zeros((1, 1))
 
+
     # Import all things Torch related
     import torch
     import torchvision
@@ -103,6 +105,7 @@ if __name__ == "__main__":
     project_name = config["wandb"]["project_name"]
     run_name = config["wandb"]["run_name"]
     save_location = config["wandb"]["save_location"]
+    save_freq = config["wandb"]["save_frequency"]
 
     # Print the loaded configuration (for demonstration purposes)
     print(f"Using GPU index: {args.gpu_index}")
@@ -289,9 +292,38 @@ if __name__ == "__main__":
         config=config,
     )
 
+    # Check if the save location exists, if not, create it
+    if not os.path.exists(save_location):
+        os.makedirs(save_location)
+
     for k in tqdm(range(kmax)):
         # initialize the wandb log
         wandb_log = {}
+
+        if k % save_freq == 0:
+            # save the current state of the reconstruction
+            save_dict = {}
+            if use_low_rank:
+                if use_one_hot:
+                    save_dict["U"] = U
+                    save_dict["V"] = V
+                    save_dict["weights"] = weights
+                    save_dict["temperature"] = temperature
+                    save_dict["opt_state_U"] = opt_state_U
+                    save_dict["opt_state_V"] = opt_state_V
+                    save_dict["opt_state_weights"] = opt_state_weights
+                else:
+                    save_dict["U"] = U
+                    save_dict["V"] = V
+                    save_dict["opt_state_U"] = opt_state_U
+                    save_dict["opt_state_V"] = opt_state_V
+            else:
+                save_dict["xk"] = xk
+                save_dict["opt_state"] = opt_state
+
+            # save the dictionary with pickle
+            with open(os.path.join(save_location, f"recon_{k}.pkl"), "wb") as f:
+                pickle.dump(save_dict, f)
 
         # log the measurement, psf, and ground truth at the start of the reconstruction
         if k == 0:
