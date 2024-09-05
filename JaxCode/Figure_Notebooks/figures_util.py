@@ -7,7 +7,7 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
 # find beads in image
-def findbeadsinimage(false_color, beadsize=15, skip = [-1], maxnum = 10, label_bead = False, show_gray = False, colindices = [], use_colors = []):
+def findbeadsinimage(false_color, beadsize=15, skip = [-1], maxnum = 10, label_bead = False, show_gray = False, colindices = [], use_colors = [], gray_thresh = 20):
     # Create a numpy array
     image_array = (false_color*255).astype('uint8')
     image_array_bgr = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
@@ -16,7 +16,7 @@ def findbeadsinimage(false_color, beadsize=15, skip = [-1], maxnum = 10, label_b
     gray = cv2.cvtColor(image_array_bgr, cv2.COLOR_BGR2GRAY)
 
     # Apply thresholding to create a binary image
-    _, binary =  cv2.threshold(gray, 20, 255, cv2.THRESH_BINARY)
+    _, binary =  cv2.threshold(gray, gray_thresh, 255, cv2.THRESH_BINARY)
     if show_gray:
         plt.figure()
         plt.imshow(binary,cmap = 'gray')
