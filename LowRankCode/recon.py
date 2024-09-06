@@ -350,6 +350,9 @@ if __name__ == "__main__":
             )
             if use_low_rank:
                 wandb_log = sdc.wandb_log_low_rank_components(wandb_log, U, wavelengths)
+            # save the datacube
+            if save_location != '':
+                np.save(os.path.join(save_location, run_name+'.npy'), xk)
 
         if use_low_rank:
             if use_one_hot:
