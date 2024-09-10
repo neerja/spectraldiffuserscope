@@ -109,6 +109,9 @@ def initialize_data(config):
     hpad = jax.lax.pad(psf[None, ...], 0.0, padding).squeeze()
     hfftpad = jnp.fft.fft2(hpad)
 
+
+    xk = sdc.jax_adjoint_model(meas, m, hfftpad, padding)
+
     return meas, psf, m, xk, hfftpad
 
 def initialize_svd(xk, rank):
@@ -550,6 +553,7 @@ if __name__ == "__main__":
 
     # Initialize data (meas, psf, filter stack, etc.)
     meas, psf, m, xk, hfftpad = initialize_data(config)
+    
 
     # Load ground truth image
     try:
@@ -585,7 +589,7 @@ if __name__ == "__main__":
     strategy = get_reconstruction_strategy(
         config["reconstruction"]["use_low_rank"],
         config["reconstruction"]["use_one_hot"],
-        U=U, V=V, W=W, Y=Y, X=X, weights=None, temperature=1,
+        xk=xk, U=U, V=V, W=W, Y=Y, X=X, weights=None, temperature=1,
         optimizer=optimizer
     )
 
