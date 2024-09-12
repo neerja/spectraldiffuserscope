@@ -2,6 +2,7 @@ name: SpecScope
 channels:
   - nvidia
   - conda-forge
+  - defaults
 dependencies:
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
@@ -40,6 +41,7 @@ dependencies:
   - cycler=0.12.1=pyhd8ed1ab_0
   - dav1d=1.2.1=hd590300_0
   - dbus=1.13.6=h5008d03_3
+  - debugpy=1.8.5=py310hf71b8c6_1
   - decorator=5.1.1=pyhd8ed1ab_0
   - dill=0.3.8=pyhd8ed1ab_0
   - docker-pycreds=0.4.0=py_0
@@ -71,12 +73,16 @@ dependencies:
   - imagecodecs=2024.6.1=py310h2c9cde1_3
   - imageio=2.35.1=pyh12aca89_0
   - importlib-metadata=8.4.0=pyha770c72_0
+  - importlib_metadata=8.4.0=hd8ed1ab_0
   - importlib_resources=6.4.5=pyhd8ed1ab_0
+  - ipykernel=6.29.5=pyh3099207_0
   - ipython=8.27.0=pyh707e725_0
   - ipywidgets=8.1.5=pyhd8ed1ab_0
   - jax=0.4.31=pyhd8ed1ab_1
   - jaxlib=0.4.31=cuda120py310h0ad4709_201
   - jedi=0.19.1=pyhd8ed1ab_0
+  - jupyter_client=8.6.2=pyhd8ed1ab_0
+  - jupyter_core=5.7.2=py310hff52083_0
   - jupyterlab_widgets=3.0.13=pyhd8ed1ab_0
   - jxrlib=1.1=hd590300_3
   - keyutils=1.6.1=h166bdaf_0
@@ -137,6 +143,7 @@ dependencies:
   - libpq=16.4=h2d7952a_1
   - libprotobuf=4.25.3=h08a7969_0
   - libre2-11=2023.09.01=h5a48ba9_2
+  - libsodium=1.0.20=h4ab18f5_0
   - libsqlite=3.46.1=hadc24fc_0
   - libssh2=1.11.0=h0841786_0
   - libstdcxx=14.1.0=hc0a3c3a_1
@@ -200,6 +207,7 @@ dependencies:
   - python_abi=3.10=5_cp310
   - pywavelets=1.7.0=py310h91a95bf_0
   - pyyaml=6.0.2=py310ha75aee5_1
+  - pyzmq=26.2.0=py310h71f11fc_2
   - qhull=2020.2=h434a139_5
   - qt6-main=6.7.2=hb12f9c5_5
   - rav1e=0.6.6=he8a937b_2
@@ -262,6 +270,7 @@ dependencies:
   - xorg-xproto=7.0.31=h7f98852_1007
   - xz=5.2.6=h166bdaf_0
   - yaml=0.2.5=h7f98852_2
+  - zeromq=4.3.5=ha4adb4c_5
   - zfp=1.0.1=hac33072_1
   - zipp=3.20.1=pyhd8ed1ab_0
   - zlib=1.3.1=h4ab18f5_1
@@ -270,4 +279,4 @@ dependencies:
   - zstd=1.5.6=ha6fb4c9_0
   - pip:
       - argparse==1.4.0
-prefix: /home/emarkley/miniforge3/envs/SpecScope
+prefix: /home/neerja/miniconda3/envs/SpecScope
