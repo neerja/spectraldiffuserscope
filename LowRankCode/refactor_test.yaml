@@ -1,0 +1,34 @@
+calibration:
+  calibration_wavelengths_file: wavelengths_2024-02-28.npy
+  filter_cube_file: spectral_filter_2024-02-28.npy
+  folder_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/JaxCode/Calibration_data
+  psf_name: psf_2024-04-22.npy
+data:
+  datafolder: /media/azuldata/neerja/2024-04-22_huvec_patterned/fluoro_beads
+  sample: fluoro_beads
+measurement_processing:
+  bits: 16
+  crop_indices:
+  - 620
+  - 1652
+  - 1350
+  - 2326
+  downsample_factor: 2
+  wvmax: 700
+  wvmin: 450
+  wvstep: 8
+reconstruction:
+  kmax: 201
+  lamtv: 1.0e-06
+  rank: 3
+  step_size: 0.1
+  thr: 6.0e-06
+  use_low_rank: false
+  use_one_hot: false
+  xytv: 1.0e-07
+wandb:
+  kprint: 50
+  project_name: HyperSpectralDiffuserScope
+  run_name: refactor_test
+  save_frequency: 1000000.0
+  save_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/JaxCode/Results
