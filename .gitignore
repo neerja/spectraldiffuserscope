@@ -1,6 +1,7 @@
 #ignore ALL files located in these directories
 Calibration_Files/
 Results/
+
 .ipynb_checkpoints
 /JaxCode/Calibration_data
 /JaxCode/Results
@@ -8,13 +9,24 @@ Results/
 /JaxCode/Reconstruction Notebooks/wandb
 /JaxCode/recon_materials_organized
 /JaxCode/Figure_Notebooks/Figures
-*.pyc
-*.pt
-# Ignore specific files
 JaxCode/cuda-keyring_1.1-1_all.deb
 JaxCode/specscope_jax.yml
+# new name for JaxCode --> PlottingCode
+/PlottingCode/Calibration_data
+/PlottingCode/Results
+/PlottingCode/wandb
+/PlottingCode/Reconstruction Notebooks/wandb
+/PlottingCode/recon_materials_organized
+/PlottingCode/Figure_Notebooks/Figures
+PlottingCode/cuda-keyring_1.1-1_all.deb
+PlottingCode/specscope_jax.yml
 
-# Ignore entire directories
 LowRankCode/test_models/
 LowRankCode/wandb/
+# new name for LowRankCode --> ReconCode
+ReconCode/test_models/
+ReconCode/wandb/
 TorchCode_2023/
+
+*.pyc
+*.pt
