@@ -10,3 +10,11 @@ Results/
 /JaxCode/Figure_Notebooks/Figures
 *.pyc
 *.pt
+# Ignore specific files
+JaxCode/cuda-keyring_1.1-1_all.deb
+JaxCode/specscope_jax.yml
+
+# Ignore entire directories
+LowRankCode/test_models/
+LowRankCode/wandb/
+TorchCode_2023/

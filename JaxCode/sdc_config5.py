@@ -627,12 +627,12 @@ def HSI2RGB_jax(wY,HSI,ydim,xdim,d,threshold):
     z=z[:i]
     
     # Compute k
-    k = 1/jnp.trapz(y * I, wY)
+    k = 1/jnp.trapezoid(y * I, wY)
     
     # Compute X,Y & Z for image
-    X = k * jnp.trapz(HSI @ jnp.diag(I * x), wY, axis=1)
-    Z = k * jnp.trapz(HSI @ jnp.diag(I * z), wY, axis=1)
-    Y = k * jnp.trapz(HSI @ jnp.diag(I * y), wY, axis=1)
+    X = k * jnp.trapezoid(HSI @ jnp.diag(I * x), wY, axis=1)
+    Z = k * jnp.trapezoid(HSI @ jnp.diag(I * z), wY, axis=1)
+    Y = k * jnp.trapezoid(HSI @ jnp.diag(I * y), wY, axis=1)
     
     XYZ = jnp.array([X, Y, Z])
     
