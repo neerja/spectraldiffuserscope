@@ -1,5 +1,4 @@
 # %%
-
 import yaml
 import argparse
 import numpy as np
@@ -8,442 +7,596 @@ import wandb
 import sys
 from tqdm import tqdm
 import pickle
-
-
+import jax.numpy as jnp
+from flax.linen import avg_pool
+import jax
+import optax
+from jax import lax
+import sdc_jax as sdc
 # %%
 def load_config(file_path):
     """
     Load and parse a YAML configuration file.
 
-    Parameters:
-    - file_path: str, path to the YAML configuration file.
+    Args:
+        file_path (str): Path to the YAML configuration file.
 
     Returns:
-    - config: dict, configuration parameters.
+        dict: Dictionary containing configuration parameters.
     """
     with open(file_path, "r") as file:
         config = yaml.safe_load(file)
     return config
 
+def initialize_data(config):
+    """
+    Initialize the necessary data for the reconstruction process, including measurements, PSF, etc.
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Process some configuration and GPU index."
-    )
-    parser.add_argument(
-        "--gpu_index", type=int, required=True, help="Index of the GPU to use"
-    )
-    parser.add_argument(
-        "--config_file_path",
-        type=str,
-        required=True,
-        help="Path to the configuration file",
-    )
-    args = parser.parse_args()
+    Args:
+        config (dict): Configuration dictionary with paths and parameters.
 
-    # Set up GPU for JAX
-    import os
-
-    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-    os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
-    os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_index)
-
-    # Set the Pytorch device
-    device = "cpu"
-
-    # Import all things JAX related
-    import jax.numpy as jnp
-    from jax import lax
-    from jax import random
-    from flax import linen as nn
-    import jax
-    import optax
-    from flax.linen import avg_pool
-
-    test = jnp.zeros((1, 1))
-
-
-    # Import all things Torch related
-    import torch
-    import torchvision
-
-    # Import the custom functions
-    sys.path.append("/home/emarkley/Workspace/PYTHON/HyperSpectralDiffuserScope")
-    import sdc_jax as sdc
-
-    # Load the configuration
-    config = load_config(args.config_file_path)
-
-    # Accessing the configuration parameters
-    calibration_folder_location = config["calibration"]["folder_location"]
-    psf_name = config["calibration"]["psf_name"]
-    calibration_wavelengths_file = config["calibration"]["calibration_wavelengths_file"]
-    filter_cube_file = config["calibration"]["filter_cube_file"]
-
-    datafolder = config["data"]["datafolder"]
-    sample = config["data"]["sample"]
-
+    Returns:
+        Tuple: Initialized measurements, PSF, filter stack, and other required data.
+    """
+    # Load the measurement data
     bits = config["measurement_processing"]["bits"]
     crop_indices = config["measurement_processing"]["crop_indices"]
-    wvmin = config["measurement_processing"]["wvmin"]
-    wvmax = config["measurement_processing"]["wvmax"]
-    wvstep = config["measurement_processing"]["wvstep"]
-    downsample_factor = config["measurement_processing"]["downsample_factor"]
-
-    kmax = config["reconstruction"]["kmax"]
-    step_size = config["reconstruction"]["step_size"]
-    thr = config["reconstruction"]["thr"]
-    xytv = config["reconstruction"]["xytv"]
-    lamtv = config["reconstruction"]["lamtv"]
-    use_low_rank = config["reconstruction"]["use_low_rank"]
-    use_one_hot = config["reconstruction"]["use_one_hot"]
-    rank = config["reconstruction"]["rank"]
-
-    kprint = config["wandb"]["kprint"]
-    project_name = config["wandb"]["project_name"]
-    run_name = config["wandb"]["run_name"]
-    save_location = config["wandb"]["save_location"]
-    save_freq = config["wandb"]["save_frequency"]
-
-    # Print the loaded configuration (for demonstration purposes)
-    print(f"Using GPU index: {args.gpu_index}")
-    print(f"Configuration loaded from {args.config_file_path}")
-
-    # Load the measurement data
+    datafolder = config["data"]["datafolder"]
+    calibration_folder_location = config["calibration"]["folder_location"]
+    calibration_wavelengths_file = config["calibration"]["calibration_wavelengths_file"]
+    psf_name = config["calibration"]["psf_name"]
+    filter_cube_file = config["calibration"]["filter_cube_file"]
+    
     try:
         sample_meas = sdc.importTiff(datafolder, "meas.tiff") / (2**bits - 1)
     except:
-        sample_meas = torch.mean(
-            sdc.tif_loader(os.path.join(datafolder, "measurements")) / (2**bits - 1), 0
-        )
+        sample_meas = jnp.mean(sdc.tif_loader(os.path.join(datafolder, "measurements")) / (2**bits - 1), axis=0)
 
     # Load the background image
     try:
         background = sdc.importTiff(datafolder, "bg.tiff") / 2**bits
     except:
         print("No background image found, continuing without background subtraction")
-        background = torch.zeros(sample_meas.shape)
+        background = jnp.zeros_like(sample_meas)
 
-    # Processd the measurement data
+    # Process the measurement data
     meas = sdc.cropci((sample_meas - background).clip(0, 1), crop_indices)
     meas = meas / meas.max()
 
     # Load wavelength calibration and downsample to spectral resolution of filter cube
-    try:
-        wv = torch.load(
-            os.path.join(calibration_folder_location, calibration_wavelengths_file),
-            map_location="cpu",
-        )
-    except:
-        wv = np.load(
-            os.path.join(calibration_folder_location, calibration_wavelengths_file)
-        )
-        wv = torch.tensor(wv)
-    wavelengths = np.arange(wvmin, wvmax + wvstep, wvstep)
+    wv = jnp.load(os.path.join(calibration_folder_location, calibration_wavelengths_file))
+    wavelengths = jnp.arange(config["measurement_processing"]["wvmin"],
+                             config["measurement_processing"]["wvmax"] + config["measurement_processing"]["wvstep"],
+                             config["measurement_processing"]["wvstep"])
 
     # Load and crop filter cube
-    try:
-        normalized_filter_cube = torch.load(
-            os.path.join(calibration_folder_location, filter_cube_file),
-            map_location="cpu",
-        )
-    except:
-        normalized_filter_cube = np.load(
-            os.path.join(calibration_folder_location, filter_cube_file)
-        )
-        normalized_filter_cube = torch.tensor(normalized_filter_cube)
+    normalized_filter_cube = jnp.load(os.path.join(calibration_folder_location, filter_cube_file))
     filterstack = sdc.cropci(normalized_filter_cube, crop_indices)
-    msum = sdc.sumFilterArray(filterstack, wv, wvmin, wvmax, wvstep)
-    spectral_filter = msum / torch.amax(msum)
-    spectral_filter = spectral_filter - torch.amin(spectral_filter, 0, keepdim=True)[0]
+    msum = sdc.sumFilterArray(filterstack, wv, config["measurement_processing"]["wvmin"],
+                              config["measurement_processing"]["wvmax"],
+                              config["measurement_processing"]["wvstep"])
+    spectral_filter = msum / jnp.amax(msum)
+    spectral_filter = spectral_filter - jnp.amin(spectral_filter, axis=0, keepdims=True)[0]
 
-    # Load and crop PSF
-    sensor_psf = torch.load(
-        os.path.join(calibration_folder_location, psf_name), map_location="cpu"
-    )
-    ccrop = torchvision.transforms.CenterCrop(spectral_filter.shape[1:])
-    psf = ccrop(sensor_psf)
-    psf = psf / torch.sum(psf)
+    # Load and process the PSF
+    sensor_psf = jnp.load(os.path.join(calibration_folder_location, psf_name))
+    psf = sdc.center_crop(sensor_psf, spectral_filter.shape[1:])
+    psf = psf / jnp.sum(psf)
     psf = psf.clip(0)
 
-    # Load ground truth image
-    try:
-        gt = sdc.importTiff(datafolder, "gt.tiff")
-        if gt.shape[-1] != 3:
-            gt = gt / 2**bits
-            gt = torchvision.transforms.functional.rotate(
-                gt.unsqueeze(0), -90
-            ).squeeze()
-        gt = gt / torch.max(gt)
-    except:
-        print("No ground truth image found, continuing without ground truth")
-        gt = torch.zeros(meas.shape)
+    # Downsample measurements, PSF, and spectral filter
+    downsample_factor = config["measurement_processing"]["downsample_factor"]
+    m = avg_pool(jnp.array(spectral_filter)[..., None],
+                 (downsample_factor, downsample_factor),
+                 (downsample_factor, downsample_factor),
+                 "VALID").squeeze()
+    psf = avg_pool(jnp.array(psf)[None, ..., None],
+                   (downsample_factor, downsample_factor),
+                   (downsample_factor, downsample_factor),
+                   "VALID").squeeze()
+    meas = avg_pool(jnp.array(meas)[None, ..., None],
+                    (downsample_factor, downsample_factor),
+                    (downsample_factor, downsample_factor),
+                    "VALID").squeeze()
 
-    # Downsample and move everything to GPU
-    m = avg_pool(
-        jnp.array(spectral_filter)[..., None],
-        (downsample_factor, downsample_factor),
-        (downsample_factor, downsample_factor),
-        "VALID",
-    ).squeeze()
-    psf = avg_pool(
-        jnp.array(psf)[None, ..., None],
-        (downsample_factor, downsample_factor),
-        (downsample_factor, downsample_factor),
-        "VALID",
-    ).squeeze()
-    meas = avg_pool(
-        jnp.array(meas)[None, ..., None],
-        (downsample_factor, downsample_factor),
-        (downsample_factor, downsample_factor),
-        "VALID",
-    ).squeeze()
-    gt = gt.to(device)
-
-    # Set up fourier space of PSF
-    xk = jnp.zeros(m.shape)
+    # Initialize Fourier space of PSF
+    xk = jnp.zeros_like(m)
     padding = (
         (0, 0, 0),
-        (
-            np.ceil(xk.shape[1] / 2).astype(int),
-            np.floor(xk.shape[1] / 2).astype(int),
-            0,
-        ),
-        (
-            np.ceil(xk.shape[2] / 2).astype(int),
-            np.floor(xk.shape[2] / 2).astype(int),
-            0,
-        ),
+        (np.ceil(xk.shape[1] / 2).astype(int), np.floor(xk.shape[1] / 2).astype(int), 0),
+        (np.ceil(xk.shape[2] / 2).astype(int), np.floor(xk.shape[2] / 2).astype(int), 0),
     )
     hpad = jax.lax.pad(psf[None, ...], 0.0, padding).squeeze()
     hfftpad = jnp.fft.fft2(hpad)
 
-    # Calculate the adjoint
+
     xk = sdc.jax_adjoint_model(meas, m, hfftpad, padding)
 
-    # initialize the optimizer
-    optimizer = optax.adam(learning_rate=step_size, b1=0.9, b2=0.999)
+    return meas, psf, m, xk, hfftpad
 
-    # If using low rank, calculate the low rank approximation
+def initialize_svd(xk, rank):
+    """
+    Perform SVD on reshaped xk to get U, S, and V matrices.
+
+    Args:
+        xk (jnp.array): The input data to be factorized.
+        rank (int): The number of singular values to keep.
+
+    Returns:
+        Tuple: Matrices U, S, and V after performing SVD.
+    """
+    W = xk.shape[0]
+    Y = xk.shape[1]
+    X = xk.shape[2]
+    xk_reshaped = xk.reshape(W, -1)  # Shape (Lambda, X*Y)
+
+    # Perform SVD
+    U, S, VT = jnp.linalg.svd(xk_reshaped, full_matrices=False)
+    U = U[:, :rank]
+    S = S[:rank]
+    VT = VT[:rank, :]
+
+    # Combine the right singular vectors with singular values
+    V = jnp.diag(S) @ VT
+
+    return U, V, W, Y, X
+
+class Reconstruction:
+    """
+    Base class for reconstruction strategies.
+
+    Args:
+        optimizer (optax.GradientTransformation): Optimizer for updating parameters.
+    """
+    
+    def __init__(self, optimizer, **kwargs):
+        self.optimizer = optimizer
+        self.opt_state = None  # to be initialized in subclasses
+
+    def init_params(self):
+        """
+        Initialize optimizer states or parameters. 
+        Must be implemented in subclasses.
+        """
+        raise NotImplementedError
+
+    def reconstruct(self, *args):
+        """
+        Perform the reconstruction process. 
+        Must be implemented in subclasses.
+        """
+        raise NotImplementedError
+
+    def compute_loss_and_grad(self, *args):
+        """
+        Compute loss and gradients for the reconstruction.
+        Must be implemented in subclasses.
+        """
+        raise NotImplementedError
+
+    def apply_updates(self, grads):
+        """
+        Apply the gradients to update parameters using the optimizer.
+        This needs to be overridden in subclasses to handle specific parameters.
+        """
+        raise NotImplementedError
+
+    def get_save_dict(self):
+        """
+        Return a dictionary of the current reconstruction parameters for saving.
+        Must be implemented in subclasses.
+        """
+        raise NotImplementedError
+
+class LowRankReconstruction(Reconstruction):
+    """
+    Low-rank reconstruction strategy.
+
+    Args:
+        U (jnp.array): Left singular vectors.
+        V (jnp.array): Right singular vectors.
+    """
+    
+    def __init__(self, U, V, W, Y, X, **kwargs):
+        super().__init__(**kwargs)
+        self.U = U
+        self.V = V
+        self.W = W
+        self.Y = Y
+        self.X = X
+        self.opt_state_U = None
+        self.opt_state_V = None
+
+    def init_params(self):
+        """Initialize optimizer states for U and V."""
+        self.opt_state_U = self.optimizer.init(self.U)
+        self.opt_state_V = self.optimizer.init(self.V)
+
+    def reconstruct(self):
+        """
+        Reconstruct using low-rank approximation.
+
+        Returns:
+            jnp.array: The reconstructed output.
+        """
+        return sdc.low_rank_reconstruction(self.U, self.V).reshape(self.W, self.Y, self.X)
+
+    def loss_func(self, U, V, meas, padded_psf_fft, filter_array, thr, xytv, lamtv):
+        """
+        Calculate the loss for low-rank reconstruction.
+        """
+        xk = sdc.low_rank_reconstruction(U, V).reshape(filter_array.shape)
+        sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
+
+        dlam = jnp.gradient(U, axis=0)
+        ddlam = jnp.gradient(dlam, axis=0)
+        dy, dx = jnp.gradient(xk, axis=(-1, -2))
+
+        lamtv_loss = jnp.linalg.norm(ddlam, 1)
+        data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
+        tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
+        sparsity_loss = jnp.linalg.norm(V.ravel(), 1)
+
+        return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss
+
+    def compute_loss_and_grad(self, meas, hfftpad, m, thr, xytv, lamtv):
+        """
+        Compute the loss and gradients for low-rank reconstruction.
+        """
+        return jax.value_and_grad(self.loss_func, argnums=(0, 1))(
+            self.U, self.V, meas, hfftpad, m, thr, xytv, lamtv
+        )
+
+    def apply_updates(self, grads):
+        """
+        Apply gradient updates to U and V.
+        """
+        updates_U, self.opt_state_U = self.optimizer.update(grads[0], self.opt_state_U, self.U)
+        updates_V, self.opt_state_V = self.optimizer.update(grads[1], self.opt_state_V, self.V)
+        self.U = optax.apply_updates(self.U, updates_U)
+        self.V = optax.apply_updates(self.V, updates_V)
+        self.U = jnp.clip(self.U, 0, None)
+        self.V = jnp.clip(self.V, 0, None)
+        
+
+    def get_save_dict(self):
+        """
+        Return a dictionary of the current reconstruction parameters for saving.
+        """
+        return {
+            'U': self.U,
+            'V': self.V,
+            'xk': self.reconstruct()
+        }
+    
+class OneHotReconstruction(LowRankReconstruction):
+    """
+    One-hot reconstruction strategy, extending low-rank strategy.
+    """
+    
+    def __init__(self, U, V, weights=None, temperature=1.0, temperature_decay=0.994, **kwargs):
+        super().__init__(U, V, **kwargs)
+        self.weights = weights if weights is not None else V[:]
+        self.temperature = temperature
+        self.temperature_decay = temperature_decay
+        self.opt_state_weights = None
+
+    def init_params(self):
+        """Initialize optimizer states for U, V, and weights."""
+        super().init_params()
+        self.opt_state_weights = self.optimizer.init(self.weights)
+
+    def reconstruct(self):
+        """
+        Perform one-hot reconstruction using U, V, and weights.
+        """
+        return sdc.one_hot_reconstruction(self.U, self.V, self.weights, self.temperature).reshape(self.W, self.Y, self.X)
+
+    def loss_func(self, U, V, weights, meas, padded_psf_fft, filter_array, thr, xytv, lamtv, temperature):
+        """
+        Calculate the loss for one-hot reconstruction.
+        """
+        xk = sdc.one_hot_reconstruction(U, V, weights, temperature).reshape(filter_array.shape)
+        sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
+
+        dlam = jnp.gradient(U, axis=0)
+        ddlam = jnp.gradient(dlam, axis=0)
+        dy, dx = jnp.gradient(xk, axis=(-1, -2))
+
+        lamtv_loss = jnp.linalg.norm(ddlam, 1)
+        data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
+        tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
+        sparsity_loss = jnp.linalg.norm(V.ravel(), 1)
+
+        return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss
+
+    def compute_loss_and_grad(self, meas, hfftpad, m, thr, xytv, lamtv):
+        """
+        Compute the loss and gradients for one-hot reconstruction.
+        """
+        return jax.value_and_grad(self.loss_func, argnums=(0, 1, 2))(
+            self.U, self.V, self.weights, meas, hfftpad, m, thr, xytv, lamtv, self.temperature
+        )
+
+    def apply_updates(self, grads):
+        """
+        Apply gradient updates to U, V, and weights.
+        """
+        updates_U, self.opt_state_U = self.optimizer.update(grads[0], self.opt_state_U, self.U)
+        updates_V, self.opt_state_V = self.optimizer.update(grads[1], self.opt_state_V, self.V)
+        updates_weights, self.opt_state_weights = self.optimizer.update(grads[2], self.opt_state_weights, self.weights)
+        
+        self.U = optax.apply_updates(self.U, updates_U)
+        self.V = optax.apply_updates(self.V, updates_V)
+        self.weights = optax.apply_updates(self.weights, updates_weights)
+        self.U = jnp.clip(self.U, 0, None)
+        self.V = jnp.clip(self.V, 0, None)
+        self.weights = jnp.clip(self.weights, 0, None)
+
+    def update_temperature(self):
+        """
+        Update the temperature parameter using the decay factor.
+        """
+        self.temperature *= self.temperature_decay
+
+    def get_save_dict(self):
+        """
+        Return a dictionary of the current reconstruction parameters for saving.
+        """
+        return {
+            'U': self.U,
+            'V': self.V,
+            'weights': self.weights,
+            'temperature': self.temperature,
+            'xk': self.reconstruct()
+        }
+  
+class RegularReconstruction(Reconstruction):
+    """
+    Regular reconstruction strategy (no low-rank or one-hot encoding).
+    """
+    
+    def __init__(self, xk, **kwargs):
+        super().__init__(**kwargs)
+        self.xk = xk
+        self.opt_state = None
+
+    def init_params(self):
+        """Initialize optimizer state for xk."""
+        self.opt_state = self.optimizer.init(self.xk)
+
+    def reconstruct(self):
+        """
+        Perform regular reconstruction.
+
+        Returns:
+            jnp.array: The current state of xk.
+        """
+        return self.xk
+
+    def loss_func(self, xk, meas, padded_psf_fft, filter_array, thr, xytv, lamtv):
+        """
+        Define the overall loss function for regular reconstruction.
+        """
+        sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
+
+        dlam, dy, dx = jnp.gradient(xk, axis=(0, 1, 2))
+        ddlam = jnp.gradient(dlam, axis=0)
+
+        data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
+        tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
+        sparsity_loss = jnp.linalg.norm(xk.ravel(), 1)
+        lamtv_loss = jnp.linalg.norm(ddlam.ravel(), 2) ** 2
+
+        return data_loss + xytv * tv_loss + lamtv * lamtv_loss + thr * sparsity_loss
+
+    def compute_loss_and_grad(self, meas, hfftpad, m, thr, xytv, lamtv):
+        """
+        Compute the loss and gradients for regular reconstruction.
+        """
+        return jax.value_and_grad(self.loss_func, argnums=(0))(
+            self.xk, meas, hfftpad, m, thr, xytv, lamtv
+        )
+
+    def apply_updates(self, grads):
+        """
+        Apply gradient updates to xk.
+        """
+        updates_xk, self.opt_state = self.optimizer.update(grads, self.opt_state, self.xk)
+        self.xk = optax.apply_updates(self.xk, updates_xk)
+        self.xk = jnp.clip(self.xk, 0, None)
+
+    def get_save_dict(self):
+        """
+        Return a dictionary of the current reconstruction parameters for saving.
+        """
+        return {
+            'xk': self.xk
+        }
+
+
+def get_reconstruction_strategy(use_low_rank, use_one_hot, **kwargs):
+    """
+    Factory function to return the appropriate reconstruction strategy.
+
+    Args:
+        use_low_rank (bool): Flag to indicate if low-rank reconstruction should be used.
+        use_one_hot (bool): Flag to indicate if one-hot encoding should be used.
+
+    Returns:
+        Reconstruction: An instance of a subclass of Reconstruction.
+    """
     if use_low_rank:
-        # Reshape xk for SVD
-        W = xk.shape[0]
-        X = xk.shape[2]
-        Y = xk.shape[1]
-        xk_reshaped = xk.reshape(xk.shape[0], -1)  # Shape (Lambda, X*Y)
-
-        # Perform SVD
-        U, S, VT = jnp.linalg.svd(xk_reshaped, full_matrices=False)
-
-        # Keep only the first rank components
-        U = U[:, :rank]
-        S = S[:rank]
-        VT = VT[:rank, :]
-
-        # Combine the right singular vectors with the singular values
-        V = jnp.diag(S) @ VT
-
-        # Initialize optimizer states for U and V separately
-        opt_state_U = optimizer.init(U)
-        opt_state_V = optimizer.init(V)
-
         if use_one_hot:
-            # define weights
-            weights = V[:]
+            return OneHotReconstruction(**kwargs)
+        return LowRankReconstruction(**kwargs)
+    return RegularReconstruction(**kwargs)
 
-            # define the starting temperature
-            temperature = 1.0
+def run_reconstruction(
+    strategy, kmax, save_freq, kprint, meas, hfftpad, m, thr, xytv, lamtv, 
+    W, Y, X, save_location, wavelengths, run_name
+):
+    """
+    Run the reconstruction process and log progress.
 
-            # Initialize optimizer state for weights
-            opt_state_weights = optimizer.init(weights)
-
-            # Define the loss function
-            loss_func = sdc.one_hot_loss
-
-            # define loss and gradient functions
-            loss_and_grad = jax.jit(jax.value_and_grad(loss_func, (0, 1, 2)))
-
-        else:
-            # define the loss function
-            loss_func = sdc.low_rank_loss
-
-            # define loss and gradient functions
-            loss_and_grad = jax.jit(jax.value_and_grad(loss_func, (0, 1)))
-
-    else:
-        # Initialize optimizer state
-        opt_state = optimizer.init(xk)
-
-        # define the loss function
-        loss_func = sdc.loss
-
-        # define loss and gradient functions
-        loss_and_grad = jax.jit(jax.value_and_grad(loss_func, (0)))
-
-    # Initialize wandb
-    run = wandb.init(
-        # Set the project name
-        project=project_name,
-        # Set the run name
-        name=run_name,
-        # Track the config
-        config=config,
-    )
-
-    run_id = run.id # Get the run ID and use in the save location
- 
-    # Check if the save location exists, if not, create it
-    if not os.path.exists(save_location):
-        os.makedirs(save_location)
+    Args:
+        strategy (Reconstruction): Reconstruction strategy object.
+        kmax (int): Number of iterations for the reconstruction process.
+        save_freq (int): Frequency of saving the reconstruction state.
+        kprint (int): Frequency of printing/logging intermediate results.
+        meas (jnp.array): Measurement data.
+        hfftpad (jnp.array): Fourier space of PSF.
+        m (jnp.array): Measurement processing data.
+        thr (float): Threshold value.
+        xytv (float): XY total variation.
+        lamtv (float): Regularization parameter for total variation.
+        W (int): Image width.
+        Y (int): Image height.
+        X (int): Image depth.
+        save_location (str): Directory to save the results.
+        wavelengths (jnp.array): Array of wavelengths.
+        run_name (str): Name of the current run for logging.
+    """
+    strategy.init_params()
 
     for k in tqdm(range(kmax)):
-        # initialize the wandb log
         wandb_log = {}
 
         if k % save_freq == 0:
-            # save the current state of the reconstruction
-            save_dict = {}
-            if use_low_rank:
-                if use_one_hot:
-                    save_dict["U"] = U
-                    save_dict["V"] = V
-                    save_dict["weights"] = weights
-                    save_dict["temperature"] = temperature
-                    save_dict["opt_state_U"] = opt_state_U
-                    save_dict["opt_state_V"] = opt_state_V
-                    save_dict["opt_state_weights"] = opt_state_weights
-                else:
-                    save_dict["U"] = U
-                    save_dict["V"] = V
-                    save_dict["opt_state_U"] = opt_state_U
-                    save_dict["opt_state_V"] = opt_state_V
-            else:
-                save_dict["xk"] = xk
-                save_dict["opt_state"] = opt_state
+            save_reconstruction(k, strategy, save_location)
 
-            # save the dictionary with pickle
-            with open(os.path.join(save_location, f"recon_{k}.pkl"), "wb") as f:
-                pickle.dump(save_dict, f)
+        if k % kprint == 0:
+            log_intermediate_results(wandb_log, strategy, k, wavelengths, save_location, run_name)
 
-        # log the measurement, psf, and ground truth at the start of the reconstruction
-        if k == 0:
-            wandb_log = sdc.wandb_log_meas(wandb_log, meas)
-            wandb_log = sdc.wandb_log_psf(wandb_log, psf)
-            wandb_log = sdc.wandb_log_ground_truth(wandb_log, gt)
+        # Compute loss and gradients
+        loss, grads = strategy.compute_loss_and_grad(meas, hfftpad, m, thr, xytv, lamtv)
 
-            # Calculate the initial reconstruction
-            if use_low_rank:
-                if use_one_hot:
-                    xk = sdc.one_hot_reconstruction(U, V, weights, temperature).reshape(
-                        W, Y, X
-                    )
-                else:
-                    xk = sdc.low_rank_reconstruction(U, V).reshape(W, Y, X)
+        # Apply updates
+        strategy.apply_updates(grads)
 
-        # log the simulated measurement, false color reconstruction, and low rank components at kprint intervals
-        if k % kprint == 0 or k == kmax - 1:
-            wandb_log = sdc.wandb_log_sim_meas(
-                wandb_log, sdc.jax_forward_model(xk, m, hfftpad)
-            )
-            wandb_log = sdc.wandb_log_false_color_recon(
-                wandb_log, xk / jnp.max(xk) * jnp.sum(xk, 0)[None, ...], wavelengths
-            )
-            if use_low_rank:
-                wandb_log = sdc.wandb_log_low_rank_components(wandb_log, U, wavelengths)
-            # save the datacube
-            if save_location != '':
-                np.save(os.path.join(save_location, run_name+'_'+run_id+'.npy'), xk)
+        # Update temperature if using OneHotReconstruction
+        if isinstance(strategy, OneHotReconstruction):
+            strategy.update_temperature()
 
-        if use_low_rank:
-            if use_one_hot:
-                if k > 500:
-                    temperature *= 0.994
-
-                # calculate the loss and gradients
-                loss, (grad_U, grad_V, grad_weights) = loss_and_grad(
-                    U, V, weights, meas, hfftpad, m, thr, xytv, lamtv, temperature
-                )
-
-                # Get updates to U, V, and weights
-                updates_U, opt_state_U = optimizer.update(grad_U, opt_state_U, U)
-                updates_V, opt_state_V = optimizer.update(grad_V, opt_state_V, V)
-                updates_weights, opt_state_weights = optimizer.update(
-                    grad_weights, opt_state_weights, weights
-                )
-
-                # Remove any nans
-                updates_U = jnp.nan_to_num(updates_U)
-                updates_V = jnp.nan_to_num(updates_V)
-                updates_weights = jnp.nan_to_num(updates_weights)
-
-                # Apply updates to U, V, and weights
-                U = optax.apply_updates(U, updates_U)
-                V = optax.apply_updates(V, updates_V)
-                weights = optax.apply_updates(weights, updates_weights)
-
-                # Clip U, V, and weights to be non-negative
-                U = jnp.clip(U, 0, None)
-                V = jnp.clip(V, 0, None)
-                weights = jnp.clip(weights, 0, None)
-
-                # Calculate the new xk
-                xk = sdc.one_hot_reconstruction(U, V, weights, temperature).reshape(
-                    W, Y, X
-                )
-
-            else:
-                # calculate the loss and gradients
-                loss, (grad_U, grad_V) = loss_and_grad(
-                    U, V, meas, hfftpad, m, thr, xytv, lamtv
-                )
-
-                # Get updates to U and V
-                updates_U, opt_state_U = optimizer.update(grad_U, opt_state_U, U)
-                updates_V, opt_state_V = optimizer.update(grad_V, opt_state_V, V)
-
-                # Remove any nans
-                updates_U = jnp.nan_to_num(updates_U)
-                updates_V = jnp.nan_to_num(updates_V)
-
-                # Apply updates to U and V
-                U = optax.apply_updates(U, updates_U)
-                V = optax.apply_updates(V, updates_V)
-
-                # Clip U and V to be non-negative
-                U = jnp.clip(U, 0, None)
-                V = jnp.clip(V, 0, None)
-
-                # Calculate the new xk
-                xk = sdc.low_rank_reconstruction(U, V).reshape(W, Y, X)
-
-        else:
-            # calculate the loss and gradients
-            loss, grad = loss_and_grad(xk, meas, hfftpad, m, thr, xytv, lamtv)
-
-            # Get updates
-            updates, opt_state = optimizer.update(grad, opt_state, xk)
-
-            # Remove any nans
-            updates = jnp.nan_to_num(updates)
-
-            # Apply updates
-            xk = optax.apply_updates(xk, updates)
-
-            # Clip xk to be non-negative
-            xk = jnp.clip(xk, 0, None)
-
-        # log the mse of the measurement and simulated measurement
-        wandb_log["data_loss"] = (
-            jnp.linalg.norm((sdc.jax_forward_model(xk, m, hfftpad) - meas).ravel(), 2)
-            ** 2
-        )
-
-        # log the custom loss
+        # Log loss values
         wandb_log["loss"] = loss
-
-        # log everything to wandb
         wandb.log(wandb_log)
 
-# %%
+def save_reconstruction(k, strategy, save_location):
+    """
+    Save the current reconstruction state to a pickle file.
+
+    Args:
+        k (int): Current iteration number.
+        strategy (Reconstruction): Reconstruction strategy object.
+        save_location (str): Directory to save the pickle file.
+    """
+    save_dict = strategy.get_save_dict()
+    with open(os.path.join(save_location, f"recon_{k}.pkl"), "wb") as f:
+        pickle.dump(save_dict, f)
+
+def log_initial_data(wandb_log, meas, psf, gt):
+    """
+    Log the initial measurement, PSF, and ground truth data to Wandb.
+
+    Args:
+        wandb_log (dict): Dictionary to store log data.
+        meas (jnp.array): Measurement data.
+        psf (jnp.array): Point spread function (PSF).
+        gt (jnp.array): Ground truth image.
+    """
+    wandb_log = sdc.wandb_log_meas(wandb_log, meas)
+    wandb_log = sdc.wandb_log_psf(wandb_log, psf)
+    wandb_log = sdc.wandb_log_ground_truth(wandb_log, gt)
+    wandb.log(wandb_log)
+
+def log_intermediate_results(wandb_log, strategy, k, wavelengths, save_location, run_name):
+    """
+    Log intermediate results during the reconstruction process.
+
+    Args:
+        wandb_log (dict): Dictionary to store log data.
+        strategy (Reconstruction): Reconstruction strategy object.
+        k (int): Current iteration number.
+        wavelengths (jnp.array): Array of wavelengths.
+        save_location (str): Directory to save results.
+        run_name (str): Name of the current run.
+    """
+    xk = strategy.reconstruct()
+    wandb_log = sdc.wandb_log_sim_meas(wandb_log, sdc.jax_forward_model(xk, m, hfftpad))
+    wandb_log = sdc.wandb_log_false_color_recon(wandb_log, xk / jnp.max(xk) * jnp.sum(xk, 0)[None, ...], wavelengths)
+
+    if isinstance(strategy, LowRankReconstruction):
+        wandb_log = sdc.wandb_log_low_rank_components(wandb_log, strategy.U, wavelengths)
+
+    if save_location:
+        np.save(os.path.join(save_location, f"{run_name}.npy"), xk)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process some configuration and GPU index.")
+    parser.add_argument("--gpu_index", type=int, required=True, help="Index of the GPU to use")
+    parser.add_argument("--config_file_path", type=str, required=True, help="Path to the configuration file")
+    args = parser.parse_args()
+
+    # Set up GPU for JAX
+    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
+    os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_index)
+
+    # Load the configuration
+    config = load_config(args.config_file_path)
+
+    # Initialize wandb
+    wandb.init(project=config["wandb"]["project_name"], name=config["wandb"]["run_name"], config=config)
+
+    # Initialize data (meas, psf, filter stack, etc.)
+    meas, psf, m, xk, hfftpad = initialize_data(config)
+    
+
+    # Load ground truth image
+    try:
+        gt = sdc.importTiff(config["data"]["datafolder"], "gt.tiff")
+        if gt.shape[-1] != 3:
+            gt = gt / 2 ** config["measurement_processing"]["bits"]
+            gt = jnp.expand_dims(gt, 0)
+            gt = sdc.rotate_90(gt)
+            gt = jnp.squeeze(gt)
+        gt = gt / jnp.max(gt)
+    except:
+        print("No ground truth image found, continuing without ground truth")
+        gt = jnp.zeros_like(meas)
+
+    # Log initial data
+    log_initial_data({}, meas, psf, gt)
+
+    # Initialize wavelengths from config
+    wavelengths = jnp.arange(config["measurement_processing"]["wvmin"],
+                             config["measurement_processing"]["wvmax"] + config["measurement_processing"]["wvstep"],
+                             config["measurement_processing"]["wvstep"])
+
+    # Initialize SVD if using low rank
+    if config["reconstruction"]["use_low_rank"]:
+        U, V, W, Y, X = initialize_svd(xk, config["reconstruction"]["rank"])
+    else:
+        U = V = W = Y = X = None
+
+    # Initialize the optimizer
+    optimizer = optax.adam(learning_rate=config["reconstruction"]["step_size"])
+
+    # Get the appropriate reconstruction strategy
+    strategy = get_reconstruction_strategy(
+        config["reconstruction"]["use_low_rank"],
+        config["reconstruction"]["use_one_hot"],
+        xk=xk, U=U, V=V, W=W, Y=Y, X=X, weights=None, temperature=1,
+        optimizer=optimizer
+    )
+
+    # Run the reconstruction process
+    run_reconstruction(
+        strategy, config["reconstruction"]["kmax"], config["wandb"]["save_frequency"],
+        config["wandb"]["kprint"], meas, hfftpad, m, config["reconstruction"]["thr"],
+        config["reconstruction"]["xytv"], config["reconstruction"]["lamtv"],
+        W, Y, X, config["wandb"]["save_location"], wavelengths, config["wandb"]["run_name"]
+    )
