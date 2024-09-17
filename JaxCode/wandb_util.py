@@ -1,5 +1,5 @@
 from matplotlib import pyplot as plt
-import sdc_config5 as sdc
+import JaxCode.sdc_config as sdc
 import jax.numpy as jnp
 
 def wandb_log_meas(wandb_log, meas):
