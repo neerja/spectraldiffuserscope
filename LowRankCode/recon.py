@@ -434,7 +434,7 @@ def get_reconstruction_strategy(use_low_rank, use_one_hot, **kwargs):
 
 def run_reconstruction(
     strategy, kmax, save_freq, kprint, meas, hfftpad, m, thr, xytv, lamtv, 
-    W, Y, X, save_location, wavelengths, run_name
+    W, Y, X, save_location, wavelengths, run_name, run_id
 ):
     """
     Run the reconstruction process and log progress.
@@ -463,10 +463,10 @@ def run_reconstruction(
         wandb_log = {}
 
         if k % save_freq == 0:
-            save_reconstruction(k, strategy, save_location)
+            save_reconstruction(k, strategy, save_location,run_name, run_id)
 
         if k % kprint == 0:
-            log_intermediate_results(wandb_log, strategy, k, wavelengths, save_location, run_name)
+            log_intermediate_results(wandb_log, strategy, k, wavelengths, run_name)
 
         # Compute loss and gradients
         loss, grads = strategy.compute_loss_and_grad(meas, hfftpad, m, thr, xytv, lamtv)
@@ -481,8 +481,12 @@ def run_reconstruction(
         # Log loss values
         wandb_log["loss"] = loss
         wandb.log(wandb_log)
+    
+    # Log final results
+    log_intermediate_results(wandb_log, strategy, k, wavelengths, run_name)
+    save_reconstruction(k, strategy, save_location,run_name, run_id)
 
-def save_reconstruction(k, strategy, save_location):
+def save_reconstruction(k, strategy, save_location, run_name, run_id):
     """
     Save the current reconstruction state to a pickle file.
 
@@ -510,7 +514,7 @@ def log_initial_data(wandb_log, meas, psf, gt):
     wandb_log = sdc.wandb_log_ground_truth(wandb_log, gt)
     wandb.log(wandb_log)
 
-def log_intermediate_results(wandb_log, strategy, k, wavelengths, save_location, run_name):
+def log_intermediate_results(wandb_log, strategy, k, wavelengths, run_name):
     """
     Log intermediate results during the reconstruction process.
 
@@ -519,7 +523,6 @@ def log_intermediate_results(wandb_log, strategy, k, wavelengths, save_location,
         strategy (Reconstruction): Reconstruction strategy object.
         k (int): Current iteration number.
         wavelengths (jnp.array): Array of wavelengths.
-        save_location (str): Directory to save results.
         run_name (str): Name of the current run.
     """
     xk = strategy.reconstruct()
@@ -528,9 +531,6 @@ def log_intermediate_results(wandb_log, strategy, k, wavelengths, save_location,
 
     if isinstance(strategy, LowRankReconstruction):
         wandb_log = sdc.wandb_log_low_rank_components(wandb_log, strategy.U, wavelengths)
-
-    if save_location:
-        np.save(os.path.join(save_location, f"{run_name}.npy"), xk)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some configuration and GPU index.")
@@ -549,7 +549,8 @@ if __name__ == "__main__":
     config = load_config(args.config_file_path)
 
     # Initialize wandb
-    wandb.init(project=config["wandb"]["project_name"], name=config["wandb"]["run_name"], config=config)
+    wbrun = wandb.init(project=config["wandb"]["project_name"], name=config["wandb"]["run_name"], config=config)
+    run_id = wbrun.id
 
     # Initialize data (meas, psf, filter stack, etc.)
     meas, psf, m, xk, hfftpad = initialize_data(config)
@@ -598,5 +599,5 @@ if __name__ == "__main__":
         strategy, config["reconstruction"]["kmax"], config["wandb"]["save_frequency"],
         config["wandb"]["kprint"], meas, hfftpad, m, config["reconstruction"]["thr"],
         config["reconstruction"]["xytv"], config["reconstruction"]["lamtv"],
-        W, Y, X, config["wandb"]["save_location"], wavelengths, config["wandb"]["run_name"]
+        W, Y, X, config["wandb"]["save_location"], wavelengths, config["wandb"]["run_name"], run_id
     )
