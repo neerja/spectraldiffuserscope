@@ -283,7 +283,7 @@ if __name__ == "__main__":
         loss_and_grad = jax.jit(jax.value_and_grad(loss_func, (0)))
 
     # Initialize wandb
-    wandb.init(
+    run = wandb.init(
         # Set the project name
         project=project_name,
         # Set the run name
@@ -292,6 +292,8 @@ if __name__ == "__main__":
         config=config,
     )
 
+    run_id = run.id # Get the run ID and use in the save location
+ 
     # Check if the save location exists, if not, create it
     if not os.path.exists(save_location):
         os.makedirs(save_location)
@@ -341,7 +343,7 @@ if __name__ == "__main__":
                     xk = sdc.low_rank_reconstruction(U, V).reshape(W, Y, X)
 
         # log the simulated measurement, false color reconstruction, and low rank components at kprint intervals
-        if k % kprint == 0:
+        if k % kprint == 0 or k == kmax - 1:
             wandb_log = sdc.wandb_log_sim_meas(
                 wandb_log, sdc.jax_forward_model(xk, m, hfftpad)
             )
@@ -352,7 +354,7 @@ if __name__ == "__main__":
                 wandb_log = sdc.wandb_log_low_rank_components(wandb_log, U, wavelengths)
             # save the datacube
             if save_location != '':
-                np.save(os.path.join(save_location, run_name+'.npy'), xk)
+                np.save(os.path.join(save_location, run_name+'_'+run_id+'.npy'), xk)
 
         if use_low_rank:
             if use_one_hot:
