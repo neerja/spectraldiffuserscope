@@ -437,7 +437,7 @@ def get_reconstruction_strategy(use_low_rank, use_one_hot, **kwargs):
 
 def run_reconstruction(
     strategy, kmax, save_freq, kprint, meas, hfftpad, m, thr, xytv, lamtv, 
-    W, Y, X, save_location, wavelengths, run_name, run_id
+    W, Y, X, save_location, wavelengths, run_name, run_id, overwrite
 ):
     """
     Run the reconstruction process and log progress.
@@ -459,6 +459,8 @@ def run_reconstruction(
         save_location (str): Directory to save the results.
         wavelengths (jnp.array): Array of wavelengths.
         run_name (str): Name of the current run for logging.
+        run_id (str): ID of the current run for logging.
+        overwrite (bool): Flag to overwrite the same file or save iterations separately.
     """
     strategy.init_params()
 
@@ -487,9 +489,9 @@ def run_reconstruction(
     
     # Log final results
     log_intermediate_results(wandb_log, strategy, k, wavelengths, run_name)
-    save_reconstruction(k, strategy, save_location,run_name, run_id)
+    save_reconstruction(k, strategy, save_location,run_name, run_id, overwrite)
 
-def save_reconstruction(k, strategy, save_location, run_name, run_id):
+def save_reconstruction(k, strategy, save_location, run_name, run_id, overwrite=True):
     """
     Save the current reconstruction state to a pickle file.
 
@@ -497,10 +499,18 @@ def save_reconstruction(k, strategy, save_location, run_name, run_id):
         k (int): Current iteration number.
         strategy (Reconstruction): Reconstruction strategy object.
         save_location (str): Directory to save the pickle file.
+        run_name (str): Name of the current run for logging.
+        run_id (str): ID of the current run for logging.
+        overwrite (bool): Flag to overwrite the same file or save iterations separately. Default value = True
     """
+    
     save_dict = strategy.get_save_dict()
-    with open(os.path.join(save_location, f"recon_{k}.pkl"), "wb") as f:
-        pickle.dump(save_dict, f)
+    if overwrite: # overwrite the same file
+        with open(os.path.join(save_location, f"{run_name}_{run_id}.pkl"), "wb") as f:
+            pickle.dump(save_dict, f)
+    else: # else save iterations separately
+        with open(os.path.join(save_location, f"{run_name}_{run_id}_{k}.pkl"), "wb") as f:
+            pickle.dump(save_dict, f)
 
 def log_initial_data(wandb_log, meas, psf, gt):
     """
@@ -597,10 +607,16 @@ if __name__ == "__main__":
         optimizer=optimizer
     )
 
+    #Check if we want to overwrite the same file or save iterations separately
+    if config["wandb"].get("overwrite") == False:
+        overwrite = False
+    else:
+        overwrite = True
+
     # Run the reconstruction process
     run_reconstruction(
         strategy, config["reconstruction"]["kmax"], config["wandb"]["save_frequency"],
         config["wandb"]["kprint"], meas, hfftpad, m, config["reconstruction"]["thr"],
         config["reconstruction"]["xytv"], config["reconstruction"]["lamtv"],
-        W, Y, X, config["wandb"]["save_location"], wavelengths, config["wandb"]["run_name"], run_id
+        W, Y, X, config["wandb"]["save_location"], wavelengths, config["wandb"]["run_name"], run_id, overwrite
     )
