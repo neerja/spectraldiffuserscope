@@ -305,7 +305,7 @@ class OneHotReconstruction(LowRankReconstruction):
         dy, dx = jnp.gradient(xk, axis=(-1, -2))
 
         # lamtv_loss = jnp.linalg.norm(ddlam, 1)
-        lamtv_loss = jnp.sum(ddlam ** 2)
+        lamtv_loss = jnp.sum(dlam ** 2)
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
         tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
         sparsity_loss = jnp.linalg.norm(V.ravel(), 1)
@@ -389,7 +389,7 @@ class RegularReconstruction(Reconstruction):
         tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
         sparsity_loss = jnp.linalg.norm(xk.ravel(), 1)
         # lamtv_loss = jnp.linalg.norm(ddlam.ravel(), 2) ** 2
-        lamtv_loss = jnp.sum(ddlam ** 2)
+        lamtv_loss = jnp.sum(dlam ** 2)
 
         return data_loss + xytv * tv_loss + lamtv * lamtv_loss + thr * sparsity_loss
 
