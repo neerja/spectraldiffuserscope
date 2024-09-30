@@ -1,0 +1,35 @@
+calibration:
+  calibration_wavelengths_file: wavelengths_2024-02-28.npy
+  filter_cube_file: spectral_filter_2024-02-28.npy
+  folder_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Calibration_data
+  psf_name: psf_2024-04-22.npy
+data:
+  datafolder: /media/azuldata/neerja/2024-04-22_huvec_patterned/huvec_CAL_10x_left
+  sample: huvec_CAL_10x_left
+measurement_processing:
+  bits: 16
+  crop_indices:
+  - 420
+  - 1852
+  - 1250
+  - 2626
+  downsample_factor: 2
+  wvmax: 700
+  wvmin: 450
+  wvstep: 8
+reconstruction:
+  kmax: 1000
+  lamtv: 2.0e-06
+  rank: 3
+  step_size: 0.1
+  thr: 0.00006
+  use_low_rank: true
+  use_one_hot: true
+  xytv: 1.0e-05
+wandb:
+  kprint: 100
+  project_name: HyperSpectralDiffuserScope
+  run_name: huvec_CAL_10x_left_LRhot
+  save_frequency: 100
+  save_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Results/Testing
+  overwrite: True
