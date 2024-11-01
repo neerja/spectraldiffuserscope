@@ -7,6 +7,12 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 from matplotlib.widgets import RectangleSelector, Button
 
+# don't let jax eat up all the memory!
+import os
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] ="false"
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]="platform"
+os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+
 # find beads in image
 def findbeadsinimage(false_color, beadsize=15, skip = [-1], maxnum = 10, label_bead = False, show_gray = False, colindices = [], use_colors = [], gray_thresh = 20):
     # Create a numpy array

@@ -18,18 +18,18 @@ measurement_processing:
   wvmin: 450
   wvstep: 8
 reconstruction:
-  kmax: 3000
+  kmax: 1000
   lamtv: 2.0e-06
   rank: 3
-  step_size: 0.05
+  step_size: 0.1
   thr: 0.00006
-  use_low_rank: false
-  use_one_hot: false
+  use_low_rank: true
+  use_one_hot: true
   xytv: 1.0e-05
 wandb:
   kprint: 100
   project_name: HyperSpectralDiffuserScope
-  run_name: huvec_CAL_10x
+  run_name: huvec_CAL_10x_LRhot
   save_frequency: 100
   save_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Results/Testing
   overwrite: True
