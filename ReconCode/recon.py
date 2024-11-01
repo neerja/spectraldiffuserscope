@@ -228,11 +228,9 @@ class LowRankReconstruction(Reconstruction):
         xk = sdc.low_rank_reconstruction(U, V).reshape(filter_array.shape)
         sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
 
-        dlam = jnp.gradient(U, axis=0)
-        ddlam = jnp.gradient(dlam, axis=0)
+        dlam = jnp.sum(jnp.abs(jnp.diff(U, axis=0))) + jnp.abs(U[1] - U[0]) + jnp.abs(U[-1] - U[-2])
         dy, dx = jnp.gradient(xk, axis=(-1, -2))
 
-        # lamtv_loss = jnp.linalg.norm(ddlam, 1)
         lamtv_loss = jnp.sum(dlam ** 2)
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
         tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
@@ -300,8 +298,7 @@ class OneHotReconstruction(LowRankReconstruction):
         xk = sdc.one_hot_reconstruction(U, V, weights, temperature).reshape(filter_array.shape)
         sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
 
-        dlam = jnp.gradient(U, axis=0)
-        ddlam = jnp.gradient(dlam, axis=0)
+        dlam = jnp.sum(jnp.abs(jnp.diff(U, axis=0))) + jnp.abs(U[1] - U[0]) + jnp.abs(U[-1] - U[-2])
         dy, dx = jnp.gradient(xk, axis=(-1, -2))
 
         # lamtv_loss = jnp.linalg.norm(ddlam, 1)
@@ -383,12 +380,11 @@ class RegularReconstruction(Reconstruction):
         sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
 
         dlam, dy, dx = jnp.gradient(xk, axis=(0, 1, 2))
-        ddlam = jnp.gradient(dlam, axis=0)
+        dlam = jnp.sum(jnp.abs(jnp.diff(dlam, axis=0))) + jnp.abs(dlam[1] - dlam[0]) + jnp.abs(dlam[-1] - dlam[-2])
 
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
         tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
         sparsity_loss = jnp.linalg.norm(xk.ravel(), 1)
-        # lamtv_loss = jnp.linalg.norm(ddlam.ravel(), 2) ** 2
         lamtv_loss = jnp.sum(dlam ** 2)
 
         return data_loss + xytv * tv_loss + lamtv * lamtv_loss + thr * sparsity_loss

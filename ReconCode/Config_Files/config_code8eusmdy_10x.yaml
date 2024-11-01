@@ -32,3 +32,5 @@ wandb:
   run_name: one_hot_test
   save_frequency: 500
   save_location: test_models/
+
+

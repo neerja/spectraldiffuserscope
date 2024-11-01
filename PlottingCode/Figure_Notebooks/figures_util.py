@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 # scale bar
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
+from matplotlib.widgets import RectangleSelector, Button
 
 # find beads in image
 def findbeadsinimage(false_color, beadsize=15, skip = [-1], maxnum = 10, label_bead = False, show_gray = False, colindices = [], use_colors = [], gray_thresh = 20):
@@ -62,11 +63,11 @@ def findbeadsinimage(false_color, beadsize=15, skip = [-1], maxnum = 10, label_b
     return (bead_locations[:maxnum], np.array(cv2.cvtColor(image_array_bgr, cv2.COLOR_BGR2RGB))/255)
 
 
-def drawscalebar(ax, scalebarval, pxlsize, mag = 1, scalebarname = '1 superpixel', loc = 'upper left', size_vertical = 10):
+def drawscalebar(ax, scalebarval, pxlsize, mag = 1, scalebarname = '1 superpixel', loc = 'upper left', size_vertical = 10, fontsize = 24):
     scalebarsize = scalebarval*mag # micron
     scalepix = int(scalebarsize/pxlsize)
 
-    fontprops = fm.FontProperties(size=24)
+    fontprops = fm.FontProperties(size=fontsize)
     scalebar = AnchoredSizeBar(ax.transData,
                             scalepix, scalebarname, loc, 
                             pad=0.5, sep = 10,
@@ -111,3 +112,58 @@ def color_visualize(image, wavelengths, title='', figsize=(10,10)):
     plt.axis('off')  # Hide axes for better visualization
     plt.show()
     return rgb_image
+
+class SelectROI:
+    def __init__(self, image):
+        self.image = image.copy()
+        self.clone = image.copy()
+        self.rois = []  # Store ROI limits
+        self.start_point = None
+        self.selecting = False
+
+        # Create a window and bind mouse events
+        cv2.namedWindow("Select ROI")
+        cv2.setMouseCallback("Select ROI", self.mouse_callback)
+
+    def mouse_callback(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            # Start ROI selection
+            self.start_point = (x, y)
+            self.selecting = True
+
+        elif event == cv2.EVENT_MOUSEMOVE:
+            if self.selecting:
+                # Draw rectangle on clone image
+                self.image = self.clone.copy()
+                cv2.rectangle(self.image, self.start_point, (x, y), (0, 255, 0), 2)
+                cv2.imshow("Select ROI", self.image)
+
+        elif event == cv2.EVENT_LBUTTONUP:
+            # Complete ROI selection
+            self.selecting = False
+            self.extract_roi((x, y))
+
+    def extract_roi(self, end_point):
+        x1, y1 = self.start_point
+        x2, y2 = end_point
+        xmin, xmax = sorted([x1, x2])
+        ymin, ymax = sorted([y1, y2])
+
+        # Extract the ROI and display it
+        roi = self.clone[ymin:ymax, xmin:xmax]
+        self.rois.append(((xmin, xmax), (ymin, ymax)))
+        cv2.imshow("Selected ROI", roi)
+
+    def get_last_roi(self):
+        """Return the most recently selected ROI limits."""
+        return self.rois[-1] if self.rois else None
+
+    def run(self):
+        # Main loop
+        while True:
+            cv2.imshow("Select ROI", self.image)
+            key = cv2.waitKey(1) & 0xFF
+            if key == 27:  # ESC to exit
+                break
+
+        cv2.destroyAllWindows()

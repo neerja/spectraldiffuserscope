@@ -1,0 +1,34 @@
+calibration:
+  calibration_wavelengths_file: wavelengths_2024-02-23.npy
+  filter_cube_file: spectral_filter_2024-02-23.npy
+  folder_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/recon_materials_organized
+  psf_name: psf_2024-04-22.npy
+data:
+  datafolder: /media/azuldata/neerja/2024-04-22_huvec_patterned/fluoro_beads
+  sample: fluoro_beads
+measurement_processing:
+  bits: 16
+  crop_indices:
+  - 620
+  - 1652
+  - 1350
+  - 2326
+  downsample_factor: 1
+  wvmax: 800
+  wvmin: 450
+  wvstep: 6
+reconstruction:
+  kmax: 605
+  lamtv: .001
+  rank: 3
+  step_size: 0.1
+  thr: 0.0001
+  use_low_rank: true
+  use_one_hot: true
+  xytv: 5.0e-07
+wandb:
+  kprint: 50
+  project_name: FinalPaperRecons
+  run_name: fluoro_beads_paper
+  save_frequency: 1000000.0
+  save_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/Results
