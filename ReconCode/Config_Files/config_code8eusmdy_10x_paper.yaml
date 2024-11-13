@@ -4,7 +4,7 @@ calibration:
   folder_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/recon_materials_organized
   psf_name: psf_2024-05-23.npy
 data:
-  datafolder: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/DATA/2024-05-31/code8eusmdy_10x
+  datafolder: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/DATA/SDCData/2024-05-31/code8eusmdy_10x
   sample: code8eusmdy_10x
 measurement_processing:
   bits: 16
@@ -29,7 +29,6 @@ reconstruction:
 wandb:
   kprint: 50
   project_name: FinalPaperRecons
-  run_name: mrbles_a_paper
+  run_name: mrbles_d_paper
   save_frequency: 1000000.0
   save_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/Results
-

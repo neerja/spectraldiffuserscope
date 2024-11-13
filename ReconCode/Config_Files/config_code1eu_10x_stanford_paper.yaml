@@ -1,0 +1,34 @@
+calibration:
+  calibration_wavelengths_file: wavelengths_2024-02-23.npy
+  filter_cube_file: spectral_filter_2024-02-23.npy
+  folder_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/recon_materials_organized
+  psf_name: psf_2024-05-23.npy
+data:
+  datafolder: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/DATA/SDCData/2024-05-24/code1mrbles_10x_2
+  sample: code1eu_10x
+measurement_processing:
+  bits: 16
+  crop_indices:
+  - 420
+  - 1852
+  - 1350
+  - 2826
+  downsample_factor: 1
+  wvmax: 800
+  wvmin: 450
+  wvstep: 8
+reconstruction:
+  kmax: 605
+  lamtv: .0005
+  rank: 2
+  step_size: 0.1
+  thr: 0.0001
+  use_low_rank: true
+  use_one_hot: true
+  xytv: 5.0e-06
+wandb:
+  kprint: 50
+  project_name: FinalPaperRecons
+  run_name: mrbles_e_paper
+  save_frequency: 1000000.0
+  save_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/Results
