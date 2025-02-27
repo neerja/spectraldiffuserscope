@@ -13,6 +13,7 @@ import jax
 import optax
 from jax import lax
 import sdc_jax as sdc
+from jax import jit
 # %%
 def load_config(file_path):
     """
@@ -146,47 +147,35 @@ class Reconstruction:
     Base class for reconstruction strategies.
 
     Args:
-        optimizer (optax.GradientTransformation): Optimizer for updating parameters.
+        optimizer_U (optax.GradientTransformation): Optimizer for specific parameters (e.g., U in low-rank recon).
+        optimizer_other (optax.GradientTransformation): Optimizer for other parameters.
     """
-    
-    def __init__(self, optimizer, **kwargs):
-        self.optimizer = optimizer
-        self.opt_state = None  # to be initialized in subclasses
+    def __init__(self, optimizer_U=None, optimizer_other=None, **kwargs):
+        self.optimizer_U = optimizer_U
+        self.optimizer_other = optimizer_other
+        self.opt_state_U = None  # To be initialized in subclasses
+        self.opt_state_other = None  # To be initialized in subclasses
 
     def init_params(self):
-        """
-        Initialize optimizer states or parameters. 
-        Must be implemented in subclasses.
-        """
+        """Initialize optimizer states or parameters. Must be implemented in subclasses."""
         raise NotImplementedError
 
     def reconstruct(self, *args):
-        """
-        Perform the reconstruction process. 
-        Must be implemented in subclasses.
-        """
+        """Perform the reconstruction process. Must be implemented in subclasses."""
         raise NotImplementedError
 
     def compute_loss_and_grad(self, *args):
-        """
-        Compute loss and gradients for the reconstruction.
-        Must be implemented in subclasses.
-        """
+        """Compute loss and gradients for the reconstruction. Must be implemented in subclasses."""
         raise NotImplementedError
 
     def apply_updates(self, grads):
-        """
-        Apply the gradients to update parameters using the optimizer.
-        This needs to be overridden in subclasses to handle specific parameters.
-        """
+        """Apply the gradients to update parameters using optimizers. Must be implemented in subclasses."""
         raise NotImplementedError
 
     def get_save_dict(self):
-        """
-        Return a dictionary of the current reconstruction parameters for saving.
-        Must be implemented in subclasses.
-        """
+        """Return a dictionary of the current reconstruction parameters for saving. Must be implemented in subclasses."""
         raise NotImplementedError
+
 
 class LowRankReconstruction(Reconstruction):
     """
@@ -197,20 +186,22 @@ class LowRankReconstruction(Reconstruction):
         V (jnp.array): Right singular vectors.
     """
     
-    def __init__(self, U, V, W, Y, X, **kwargs):
-        super().__init__(**kwargs)
-        self.U = U
-        self.V = V
+    def __init__(self, U, V, W, Y, X, optimizer_U, optimizer_other, **kwargs):
+        super().__init__(None, **kwargs)
+        self.U = jnp.array(U)
+        self.V = jnp.array(V)
         self.W = W
         self.Y = Y
         self.X = X
+        self.optimizer_U = optimizer_U
+        self.optimizer_other = optimizer_other
         self.opt_state_U = None
         self.opt_state_V = None
 
     def init_params(self):
         """Initialize optimizer states for U and V."""
-        self.opt_state_U = self.optimizer.init(self.U)
-        self.opt_state_V = self.optimizer.init(self.V)
+        self.opt_state_U = self.optimizer_U.init(self.U)
+        self.opt_state_V = self.optimizer_other.init(self.V)
 
     def reconstruct(self):
         """
@@ -221,19 +212,22 @@ class LowRankReconstruction(Reconstruction):
         """
         return sdc.low_rank_reconstruction(self.U, self.V).reshape(self.W, self.Y, self.X)
 
-    def loss_func(self, U, V, meas, padded_psf_fft, filter_array, thr, xytv, lamtv):
+    @staticmethod
+    @jit
+    def loss_func(U, V, meas, padded_psf_fft, filter_array, thr, xytv, lamtv):
         """
         Calculate the loss for low-rank reconstruction.
         """
         xk = sdc.low_rank_reconstruction(U, V).reshape(filter_array.shape)
         sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
 
-        dlam = jnp.sum(jnp.abs(jnp.diff(U, axis=0))) + jnp.abs(U[1] - U[0]) + jnp.abs(U[-1] - U[-2])
+        ddlam = jnp.diff(U, n=2, axis=0)
+
         dy, dx = jnp.gradient(xk, axis=(-1, -2))
 
-        lamtv_loss = jnp.sum(dlam ** 2)
+        lamtv_loss = jnp.linalg.norm(ddlam, 1)
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
-        tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
+        tv_loss = jnp.sqrt(jnp.sum(dx**2 + dy**2, axis=(-2, -1)))
         sparsity_loss = jnp.linalg.norm(V.ravel(), 1)
 
         return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss
@@ -248,13 +242,16 @@ class LowRankReconstruction(Reconstruction):
 
     def apply_updates(self, grads):
         """
-        Apply gradient updates to U and V.
+        Apply gradient updates to U and V using separate optimizers.
         """
-        updates_U, self.opt_state_U = self.optimizer.update(grads[0], self.opt_state_U, self.U)
-        updates_V, self.opt_state_V = self.optimizer.update(grads[1], self.opt_state_V, self.V)
+        # Update U with its optimizer
+        updates_U, self.opt_state_U = self.optimizer_U.update(grads[0], self.opt_state_U, self.U)
         self.U = optax.apply_updates(self.U, updates_U)
-        self.V = optax.apply_updates(self.V, updates_V)
         self.U = jnp.clip(self.U, 0, None)
+
+        # Update V with its optimizer
+        updates_V, self.opt_state_V = self.optimizer_other.update(grads[1], self.opt_state_V, self.V)
+        self.V = optax.apply_updates(self.V, updates_V)
         self.V = jnp.clip(self.V, 0, None)
         
 
@@ -270,12 +267,12 @@ class LowRankReconstruction(Reconstruction):
     
 class OneHotReconstruction(LowRankReconstruction):
     """
-    One-hot reconstruction strategy, extending low-rank strategy.
+    One-hot reconstruction strategy.
     """
-    
-    def __init__(self, U, V, weights=None, temperature=1.0, temperature_decay=0.994, **kwargs):
-        super().__init__(U, V, **kwargs)
-        self.weights = weights if weights is not None else V[:]
+    def __init__(self, U, V, weights=None, temperature=1.0, temperature_decay=0.995,
+                 optimizer_U=None, optimizer_other=None, **kwargs):
+        super().__init__(U, V, optimizer_U=optimizer_U, optimizer_other=optimizer_other, **kwargs)
+        self.weights = jnp.array(weights) if weights is not None else jnp.array(V[:])
         self.temperature = temperature
         self.temperature_decay = temperature_decay
         self.opt_state_weights = None
@@ -283,7 +280,7 @@ class OneHotReconstruction(LowRankReconstruction):
     def init_params(self):
         """Initialize optimizer states for U, V, and weights."""
         super().init_params()
-        self.opt_state_weights = self.optimizer.init(self.weights)
+        self.opt_state_weights = self.optimizer_other.init(self.weights)
 
     def reconstruct(self):
         """
@@ -291,21 +288,27 @@ class OneHotReconstruction(LowRankReconstruction):
         """
         return sdc.one_hot_reconstruction(self.U, self.V, self.weights, self.temperature).reshape(self.W, self.Y, self.X)
 
-    def loss_func(self, U, V, weights, meas, padded_psf_fft, filter_array, thr, xytv, lamtv, temperature):
+    @staticmethod
+    @jit
+    def loss_func(U, V, weights, meas, padded_psf_fft, filter_array, thr, xytv, lamtv, temperature):
         """
         Calculate the loss for one-hot reconstruction.
         """
         xk = sdc.one_hot_reconstruction(U, V, weights, temperature).reshape(filter_array.shape)
         sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
 
-        dlam = jnp.sum(jnp.abs(jnp.diff(U, axis=0))) + jnp.abs(U[1] - U[0]) + jnp.abs(U[-1] - U[-2])
-        dy, dx = jnp.gradient(xk, axis=(-1, -2))
+        ddlam = jnp.diff(U, n=2, axis=0)
+        v = (jax.nn.softmax(V / temperature, axis=0) * weights).reshape((U.shape[1], filter_array.shape[1], filter_array.shape[2]))
+        dy = jnp.diff(v, axis=-2, append=v[:, -1:, :])
+        dx = jnp.diff(v, axis=-1, append=v[:, :, -1:])
 
-        # lamtv_loss = jnp.linalg.norm(ddlam, 1)
-        lamtv_loss = jnp.sum(dlam ** 2)
+        lamtv_loss = jnp.linalg.norm(ddlam, 1)
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
-        tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
-        sparsity_loss = jnp.linalg.norm(V.ravel(), 1)
+
+        # tv_loss = jnp.sum(jnp.abs(dx)) + jnp.sum(jnp.abs(dy))
+        tv_loss = jnp.sum(jnp.sqrt((dx**2) + (dy**2) + 1e-10))
+
+        sparsity_loss = jnp.linalg.norm(jax.nn.softmax(V / temperature, axis=0) * weights, 1)
 
         return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss
 
@@ -319,18 +322,15 @@ class OneHotReconstruction(LowRankReconstruction):
 
     def apply_updates(self, grads):
         """
-        Apply gradient updates to U, V, and weights.
+        Apply gradient updates to U, V, and weights using separate optimizers.
         """
-        updates_U, self.opt_state_U = self.optimizer.update(grads[0], self.opt_state_U, self.U)
-        updates_V, self.opt_state_V = self.optimizer.update(grads[1], self.opt_state_V, self.V)
-        updates_weights, self.opt_state_weights = self.optimizer.update(grads[2], self.opt_state_weights, self.weights)
-        
-        self.U = optax.apply_updates(self.U, updates_U)
-        self.V = optax.apply_updates(self.V, updates_V)
+        super().apply_updates(grads[:2])  # Updates for U and V
+
+        # Update weights with its optimizer
+        updates_weights, self.opt_state_weights = self.optimizer_other.update(grads[2], self.opt_state_weights, self.weights)
         self.weights = optax.apply_updates(self.weights, updates_weights)
-        self.U = jnp.clip(self.U, 0, None)
-        self.V = jnp.clip(self.V, 0, None)
         self.weights = jnp.clip(self.weights, 0, None)
+
 
     def update_temperature(self):
         """
@@ -353,65 +353,59 @@ class OneHotReconstruction(LowRankReconstruction):
 class RegularReconstruction(Reconstruction):
     """
     Regular reconstruction strategy (no low-rank or one-hot encoding).
+
+    Args:
+        xk (jnp.array): Current reconstruction estimate.
+        optimizer_U (optax.GradientTransformation): Optimizer for `xk`.
+        optimizer_other (optax.GradientTransformation): Not used but added for consistency.
     """
-    
-    def __init__(self, xk, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, xk, optimizer_U=None, optimizer_other=None, **kwargs):
+        super().__init__(optimizer_U=optimizer_U, optimizer_other=optimizer_other, **kwargs)
         self.xk = xk
-        self.opt_state = None
+        self.opt_state_U = None  # Use `optimizer_U` for `xk`.
 
     def init_params(self):
         """Initialize optimizer state for xk."""
-        self.opt_state = self.optimizer.init(self.xk)
+        self.opt_state_U = self.optimizer_U.init(self.xk)
 
     def reconstruct(self):
-        """
-        Perform regular reconstruction.
-
-        Returns:
-            jnp.array: The current state of xk.
-        """
+        """Perform regular reconstruction."""
         return self.xk
 
-    def loss_func(self, xk, meas, padded_psf_fft, filter_array, thr, xytv, lamtv):
-        """
-        Define the overall loss function for regular reconstruction.
-        """
+    @staticmethod
+    @jit
+    def loss_func(xk, meas, padded_psf_fft, filter_array, thr, xytv, lamtv):
+        """Define the loss function for regular reconstruction."""
         sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
 
-        dlam, dy, dx = jnp.gradient(xk, axis=(0, 1, 2))
-        dlam = jnp.sum(jnp.abs(jnp.diff(dlam, axis=0))) + jnp.abs(dlam[1] - dlam[0]) + jnp.abs(dlam[-1] - dlam[-2])
+        dy, dx = jnp.gradient(xk, axis=(1, 2))
+        ddlam = jnp.diff(xk, n=2, axis=0)
 
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
         tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
         sparsity_loss = jnp.linalg.norm(xk.ravel(), 1)
-        lamtv_loss = jnp.sum(dlam ** 2)
+        lamtv_loss = jnp.linalg.norm(ddlam, 1)
 
         return data_loss + xytv * tv_loss + lamtv * lamtv_loss + thr * sparsity_loss
 
     def compute_loss_and_grad(self, meas, hfftpad, m, thr, xytv, lamtv):
-        """
-        Compute the loss and gradients for regular reconstruction.
-        """
+        """Compute the loss and gradients for regular reconstruction."""
         return jax.value_and_grad(self.loss_func, argnums=(0))(
             self.xk, meas, hfftpad, m, thr, xytv, lamtv
         )
 
     def apply_updates(self, grads):
-        """
-        Apply gradient updates to xk.
-        """
-        updates_xk, self.opt_state = self.optimizer.update(grads, self.opt_state, self.xk)
+        """Apply gradient updates to xk using optimizer_U."""
+        updates_xk, self.opt_state_U = self.optimizer_U.update(grads, self.opt_state_U, self.xk)
         self.xk = optax.apply_updates(self.xk, updates_xk)
         self.xk = jnp.clip(self.xk, 0, None)
 
     def get_save_dict(self):
-        """
-        Return a dictionary of the current reconstruction parameters for saving.
-        """
+        """Return a dictionary of the current reconstruction parameters for saving."""
         return {
             'xk': self.xk
         }
+
 
 
 def get_reconstruction_strategy(use_low_rank, use_one_hot, **kwargs):
@@ -478,7 +472,10 @@ def run_reconstruction(
         # Update temperature if using OneHotReconstruction
         if isinstance(strategy, OneHotReconstruction):
             strategy.update_temperature()
-
+            # if k>250:
+                # strategy.update_temperature()
+            # else:
+            #     strategy.weights = strategy.weights.at[:].set(strategy.V)
         # Log loss values
         wandb_log["loss"] = loss
         wandb.log(wandb_log)
@@ -589,18 +586,36 @@ if __name__ == "__main__":
     # Initialize SVD if using low rank
     if config["reconstruction"]["use_low_rank"]:
         U, V, W, Y, X = initialize_svd(xk, config["reconstruction"]["rank"])
+        # clip U and V to be positive
+        U = jnp.clip(U, 0, None)
+        V = jnp.clip(V, 0, None)
+        # make U and V random
+        # U = jax.random.normal(jax.random.PRNGKey(0), U.shape) * 1e-6
+        # V = jax.random.normal(jax.random.PRNGKey(0), V.shape) * 1e-6
     else:
         U = V = W = Y = X = None
 
+    if config["reconstruction"]["use_one_hot"]:
+        try:
+            temperature_decay = config["reconstruction"]["temperature_decay"]
+        except:
+            temperature_decay = 0.995
+    else:
+        temperature_decay = None
+
     # Initialize the optimizer
-    optimizer = optax.adam(learning_rate=config["reconstruction"]["step_size"])
+    optimizer_other = optax.adam(learning_rate=config["reconstruction"]["step_size"])
+    if config["reconstruction"]["use_one_hot"] or config["reconstruction"]["use_low_rank"]:
+        optimizer_U = optax.adam(learning_rate=config["reconstruction"]["step_size"] * 10)
+    else:
+        optimizer_U = None
 
     # Get the appropriate reconstruction strategy
     strategy = get_reconstruction_strategy(
         config["reconstruction"]["use_low_rank"],
         config["reconstruction"]["use_one_hot"],
-        xk=xk, U=U, V=V, W=W, Y=Y, X=X, weights=None, temperature=1,
-        optimizer=optimizer
+        xk=xk, U=U, V=V, W=W, Y=Y, X=X, weights=None, temperature=1, temperature_decay=temperature_decay,
+        optimizer_other=optimizer_other, optimizer_U=optimizer_U
     )
 
     #Check if we want to overwrite the same file or save iterations separately
@@ -616,3 +631,6 @@ if __name__ == "__main__":
         config["reconstruction"]["xytv"], config["reconstruction"]["lamtv"],
         W, Y, X, config["wandb"]["save_location"], wavelengths, config["wandb"]["run_name"], run_id, overwrite
     )
+
+
+

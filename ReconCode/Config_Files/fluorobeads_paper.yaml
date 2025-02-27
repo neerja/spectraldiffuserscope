@@ -18,14 +18,15 @@ measurement_processing:
   wvmin: 450
   wvstep: 6
 reconstruction:
-  kmax: 605
-  lamtv: .001
-  rank: 3
-  step_size: 0.1
-  thr: 0.0001
+  kmax: 501
+  lamtv: .2
+  rank: 2
+  step_size: 0.05
+  thr: .005
   use_low_rank: true
   use_one_hot: true
-  xytv: 5.0e-07
+  temperature_decay: 0.995
+  xytv: 2.0e-4
 wandb:
   kprint: 50
   project_name: FinalPaperRecons

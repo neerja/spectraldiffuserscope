@@ -25,7 +25,7 @@ reconstruction:
   thr: 0.0006
   use_low_rank: false
   use_one_hot: false
-  xytv: 1.0e-06
+  xytv: 1.0e-03
 wandb:
   kprint: 100
   project_name: HyperSpectralDiffuserScope

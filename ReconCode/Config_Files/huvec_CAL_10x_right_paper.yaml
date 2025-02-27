@@ -9,23 +9,24 @@ data:
 measurement_processing:
   bits: 16
   crop_indices:
-  - 600
-  - 1400
-  - 1400
-  - 2400
+  - 500
+  - 1800
+  - 1100
+  - 2900
   downsample_factor: 1
   wvmax: 800
   wvmin: 450
   wvstep: 6
 reconstruction:
-  kmax: 410
-  lamtv: .001
-  rank: 3
-  step_size: 0.1
-  thr: 0.0005
+  kmax: 601
+  lamtv: .2
+  rank: 2
+  step_size: 0.05
+  thr: .0005
   use_low_rank: true
   use_one_hot: true
-  xytv: 1.0e-06
+  temperature_decay: 0.999
+  xytv: 2.0e-4
 wandb:
   kprint: 50
   project_name: FinalPaperRecons
