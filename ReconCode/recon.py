@@ -610,6 +610,14 @@ if __name__ == "__main__":
     else:
         optimizer_U = None
 
+    # If a path to a saved reconstruction is provided, load the saved reconstruction for initialization
+    if config["reconstruction"].get("recon_init_path"):
+        with open(config["reconstruction"]["recon_init_path"], "rb") as f:
+            save_dict = pickle.load(f)
+        # xk = save_dict["xk"]
+        U = save_dict["U"]
+        # V = save_dict["V"]
+
     # Get the appropriate reconstruction strategy
     strategy = get_reconstruction_strategy(
         config["reconstruction"]["use_low_rank"],
