@@ -223,11 +223,12 @@ class LowRankReconstruction(Reconstruction):
 
         ddlam = jnp.diff(U, n=2, axis=0)
 
-        dy, dx = jnp.gradient(xk, axis=(-1, -2))
+        dy = jnp.diff(xk, axis=-2, append=xk[:, -1:, :])
+        dx = jnp.diff(xk, axis=-1, append=xk[:, :, -1:])
 
         lamtv_loss = jnp.linalg.norm(ddlam, 1)
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
-        tv_loss = jnp.sqrt(jnp.sum(dx**2 + dy**2, axis=(-2, -1)))
+        tv_loss = jnp.sum(jnp.sqrt((dx**2) + (dy**2) + 1e-10))
         sparsity_loss = jnp.linalg.norm(V.ravel(), 1)
 
         return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss
@@ -378,11 +379,12 @@ class RegularReconstruction(Reconstruction):
         """Define the loss function for regular reconstruction."""
         sim_meas = sdc.jax_forward_model(xk, filter_array, padded_psf_fft)
 
-        dy, dx = jnp.gradient(xk, axis=(1, 2))
         ddlam = jnp.diff(xk, n=2, axis=0)
+        dy = jnp.diff(xk, axis=-2, append=xk[:, -1:, :])
+        dx = jnp.diff(xk, axis=-1, append=xk[:, :, -1:])
 
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
-        tv_loss = jnp.linalg.norm(dx.ravel(), 1) + jnp.linalg.norm(dy.ravel(), 1)
+        tv_loss = jnp.sum(jnp.sqrt((dx**2) + (dy**2) + 1e-10))
         sparsity_loss = jnp.linalg.norm(xk.ravel(), 1)
         lamtv_loss = jnp.linalg.norm(ddlam, 1)
 
