@@ -18,15 +18,16 @@ measurement_processing:
   wvmin: 450
   wvstep: 6
 reconstruction:
-  kmax: 1000
+  kmax: 5000
   lamtv: 0
-  rank: 5
+  rank: 4
   step_size: 0.05
   thr: 0
   xytv: 2.0e-3
   use_low_rank: true
   use_one_hot: true
   temperature_decay: 0.999
+  random_init: true
 wandb:
   kprint: 100
   project_name: HyperSpectralDiffuserScope

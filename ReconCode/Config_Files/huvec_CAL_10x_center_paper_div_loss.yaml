@@ -2,35 +2,35 @@ calibration:
   calibration_wavelengths_file: wavelengths_2024-02-23.npy
   filter_cube_file: spectral_filter_2024-02-23.npy
   folder_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/recon_materials_organized
-  psf_name: psf_2024-05-23.npy
+  psf_name: psf_2024-04-22.npy
 data:
-  datafolder: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/DATA/SDCData/2024-05-30/code2sm_10x_2
-  sample: code2sm_10x
+  datafolder: /media/azuldata/neerja/2024-04-22_huvec_patterned/huvec_CAL_10x
+  sample: huvec_CAL_10x_center
 measurement_processing:
   bits: 16
   crop_indices:
-  - 420
-  - 1852
-  - 1350
-  - 2826
+  - 500
+  - 1800
+  - 1100
+  - 2900
   downsample_factor: 1
   wvmax: 800
   wvmin: 450
-  wvstep: 8
+  wvstep: 6
 reconstruction:
-  kmax: 301
-  lamtv: .002
-  rank: 1
+  kmax: 601
+  lamtv: .2
+  rank: 3
   step_size: 0.05
   thr: .0005
   use_low_rank: true
   use_one_hot: true
   temperature_decay: 0.999
-  xytv: 5.0e-4
+  xytv: 2.5e-4
   random_init: true
 wandb:
   kprint: 50
-  project_name: FinalPaperRecons
-  run_name: mrbles_c_paper
-  save_frequency: 100.0
+  project_name: HyperSpectralDiffuserScope
+  run_name: huvec_CAL_10x_center_LRhot_div_loss
+  save_frequency: 100
   save_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/Results
