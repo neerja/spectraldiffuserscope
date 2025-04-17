@@ -440,7 +440,7 @@ def get_reconstruction_strategy(use_low_rank, use_one_hot, **kwargs):
 
 def run_reconstruction(
     strategy, kmax, save_freq, kprint, meas, hfftpad, m, thr, xytv, lamtv, 
-    W, Y, X, save_location, wavelengths, run_name, run_id, overwrite
+    W, Y, X, save_location, wavelengths, run_name, run_id, overwrite, temperature_delay=0
 ):
     """
     Run the reconstruction process and log progress.
@@ -464,6 +464,7 @@ def run_reconstruction(
         run_name (str): Name of the current run for logging.
         run_id (str): ID of the current run for logging.
         overwrite (bool): Flag to overwrite the same file or save iterations separately.
+        temperature_delay (int): Delay for temperature update.
     """
     strategy.init_params()
 
@@ -484,11 +485,8 @@ def run_reconstruction(
 
         # Update temperature if using OneHotReconstruction
         if isinstance(strategy, OneHotReconstruction):
-            # strategy.update_temperature()
-            if k>500:
+            if k>temperature_delay:
                 strategy.update_temperature()
-            # else:
-            #     strategy.weights = strategy.weights.at[:].set(strategy.V)
         # Log loss values
         wandb_log["loss"] = loss
         wandb.log(wandb_log)
@@ -553,8 +551,8 @@ def log_intermediate_results(wandb_log, strategy, k, wavelengths, run_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some configuration and GPU index.")
-    parser.add_argument("--gpu_index", type=int, required=True, help="Index of the GPU to use")
-    parser.add_argument("--config_file_path", type=str, required=True, help="Path to the configuration file")
+    parser.add_argument("config_file_path", type=str, help="Path to the configuration file")
+    parser.add_argument("gpu_index", type=int, help="Index of the GPU to use")
     args = parser.parse_args()
 
     # Set up GPU for JAX
@@ -602,21 +600,21 @@ if __name__ == "__main__":
         # clip U and V to be positive
         U = jnp.clip(U, 0, None)
         V = jnp.clip(V, 0, None)
-        # make U and V random
-        if config["reconstruction"]["random_init"]:
-            U = U +jax.random.normal(jax.random.PRNGKey(0), U.shape) * 1e-2
+        # make U and V random if specified in config
+        if config["reconstruction"].get("random_init", False):
+            U = U + jax.random.normal(jax.random.PRNGKey(0), U.shape) * 1e-2
             U = jnp.clip(U, 0, None)
             V = jax.random.normal(jax.random.PRNGKey(0), V.shape) * 1e-6
     else:
         U = V = W = Y = X = None
 
+    # Get one-hot reconstruction parameters with defaults if not specified
     if config["reconstruction"]["use_one_hot"]:
-        try:
-            temperature_decay = config["reconstruction"]["temperature_decay"]
-        except:
-            temperature_decay = 0.995
+        temperature_decay = config["reconstruction"].get("temperature_decay", 0.999)
+        temperature_delay = config["reconstruction"].get("temperature_delay", 0)
     else:
         temperature_decay = None
+        temperature_delay = None
 
     # Initialize the optimizer
     optimizer_other = optax.adam(learning_rate=config["reconstruction"]["step_size"])

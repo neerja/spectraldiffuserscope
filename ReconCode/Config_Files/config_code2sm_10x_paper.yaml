@@ -18,7 +18,7 @@ measurement_processing:
   wvmin: 450
   wvstep: 8
 reconstruction:
-  kmax: 301
+  kmax: 601
   lamtv: .002
   rank: 1
   step_size: 0.05
@@ -28,6 +28,7 @@ reconstruction:
   temperature_decay: 0.999
   xytv: 5.0e-4
   random_init: true
+  temperature_delay: 300
 wandb:
   kprint: 50
   project_name: FinalPaperRecons

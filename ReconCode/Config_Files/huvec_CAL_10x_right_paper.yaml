@@ -18,7 +18,7 @@ measurement_processing:
   wvmin: 450
   wvstep: 6
 reconstruction:
-  kmax: 601
+  kmax: 1001
   lamtv: .2
   rank: 2
   step_size: 0.05
@@ -26,6 +26,8 @@ reconstruction:
   use_low_rank: true
   use_one_hot: true
   temperature_decay: 0.999
+  temperature_delay: 500
+  random_init: true
   xytv: 2.0e-4
 wandb:
   kprint: 50
