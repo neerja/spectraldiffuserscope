@@ -1,0 +1,39 @@
+calibration:
+  calibration_wavelengths_file: wavelengths_2024-02-23.npy
+  filter_cube_file: spectral_filter_2024-02-23.npy
+  # folder_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/recon_materials_organized
+  folder_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Calibration_data
+  psf_name: psf_2024-04-22.npy
+data:
+  datafolder: /media/azuldata/neerja/2024-02-01/drying_beads_drop/meas0010
+  sample: drying_beads_drop
+measurement_processing:
+  bits: 16
+  crop_indices:
+  - 420
+  - 1852
+  - 1450
+  - 2826
+  downsample_factor: 1
+  wvmax: 800
+  wvmin: 450
+  wvstep: 6
+reconstruction:
+  recon_init_path: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Results/Drying_Beads_Drop_initializewithprevUonly/drying_beads_drop_009_a2brcokf.pkl
+  kmax: 501
+  lamtv: .2
+  rank: 3
+  step_size: 0.05
+  thr: .005
+  use_low_rank: true
+  use_one_hot: true
+  temperature_decay: 0.995
+  xytv: 2.0e-4
+
+wandb:
+  kprint: 50
+  project_name: FinalPaperRecons
+  run_name: drying_beads_drop_010
+  save_frequency: 1000000.0
+  # save_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/Results
+  save_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Results/Drying_Beads_Drop_initializewithprevUonly

@@ -133,7 +133,7 @@ def initialize_svd(xk, rank):
 
     # Perform SVD
     U, S, VT = jnp.linalg.svd(xk_reshaped, full_matrices=False)
-    U = U[:, :rank]
+    U = U[:, 1:1+rank]
     S = S[:rank]
     VT = VT[:rank, :]
 
@@ -247,11 +247,15 @@ class LowRankReconstruction(Reconstruction):
         """
         # Update U with its optimizer
         updates_U, self.opt_state_U = self.optimizer_U.update(grads[0], self.opt_state_U, self.U)
+        # replace NaNs with 0
+        updates_U = jnp.where(jnp.isnan(updates_U), 0, updates_U)
         self.U = optax.apply_updates(self.U, updates_U)
         self.U = jnp.clip(self.U, 0, None)
 
         # Update V with its optimizer
         updates_V, self.opt_state_V = self.optimizer_other.update(grads[1], self.opt_state_V, self.V)
+        # replace NaNs with 0
+        updates_V = jnp.where(jnp.isnan(updates_V), 0, updates_V)
         self.V = optax.apply_updates(self.V, updates_V)
         self.V = jnp.clip(self.V, 0, None)
         
@@ -309,9 +313,15 @@ class OneHotReconstruction(LowRankReconstruction):
         # tv_loss = jnp.sum(jnp.abs(dx)) + jnp.sum(jnp.abs(dy))
         tv_loss = jnp.sum(jnp.sqrt((dx**2) + (dy**2) + 1e-10))
 
+        # diversity loss
+        norm_U = U / (jnp.linalg.norm(U, axis=0, keepdims=True) + 1e-8)  # normalize each column (i.e., spectrum)
+        gram_matrix = norm_U.T @ norm_U                                  # (n_spectra × n_spectra)
+        off_diag = gram_matrix - jnp.eye(U.shape[1])
+        div_loss = jnp.sum(off_diag ** 2)
+
         sparsity_loss = jnp.linalg.norm(jax.nn.softmax(V / temperature, axis=0) * weights, 1)
 
-        return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss
+        return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss + div_loss*1
 
     def compute_loss_and_grad(self, meas, hfftpad, m, thr, xytv, lamtv):
         """
@@ -328,6 +338,7 @@ class OneHotReconstruction(LowRankReconstruction):
         super().apply_updates(grads[:2])  # Updates for U and V
 
         # Update weights with its optimizer
+        # print the U grads
         updates_weights, self.opt_state_weights = self.optimizer_other.update(grads[2], self.opt_state_weights, self.weights)
         self.weights = optax.apply_updates(self.weights, updates_weights)
         self.weights = jnp.clip(self.weights, 0, None)
@@ -357,17 +368,17 @@ class RegularReconstruction(Reconstruction):
 
     Args:
         xk (jnp.array): Current reconstruction estimate.
-        optimizer_U (optax.GradientTransformation): Optimizer for `xk`.
-        optimizer_other (optax.GradientTransformation): Not used but added for consistency.
+        optimizer_U (optax.GradientTransformation): Not used but added for consistency.
+        optimizer_other (optax.GradientTransformation): Optimizer for `xk`.
     """
     def __init__(self, xk, optimizer_U=None, optimizer_other=None, **kwargs):
         super().__init__(optimizer_U=optimizer_U, optimizer_other=optimizer_other, **kwargs)
         self.xk = xk
-        self.opt_state_U = None  # Use `optimizer_U` for `xk`.
+        self.opt_state_xk = None  # Use `optimizer_U` for `xk`.
 
     def init_params(self):
         """Initialize optimizer state for xk."""
-        self.opt_state_U = self.optimizer_U.init(self.xk)
+        self.opt_state_xk = self.optimizer_other.init(self.xk)
 
     def reconstruct(self):
         """Perform regular reconstruction."""
@@ -386,7 +397,7 @@ class RegularReconstruction(Reconstruction):
         data_loss = jnp.linalg.norm((sim_meas - meas).ravel(), 2) ** 2
         tv_loss = jnp.sum(jnp.sqrt((dx**2) + (dy**2) + 1e-10))
         sparsity_loss = jnp.linalg.norm(xk.ravel(), 1)
-        lamtv_loss = jnp.linalg.norm(ddlam, 1)
+        lamtv_loss = jnp.linalg.norm(ddlam.ravel(), 1)
 
         return data_loss + xytv * tv_loss + lamtv * lamtv_loss + thr * sparsity_loss
 
@@ -398,7 +409,7 @@ class RegularReconstruction(Reconstruction):
 
     def apply_updates(self, grads):
         """Apply gradient updates to xk using optimizer_U."""
-        updates_xk, self.opt_state_U = self.optimizer_U.update(grads, self.opt_state_U, self.xk)
+        updates_xk, self.opt_state_xk = self.optimizer_other.update(grads, self.opt_state_xk, self.xk)
         self.xk = optax.apply_updates(self.xk, updates_xk)
         self.xk = jnp.clip(self.xk, 0, None)
 
@@ -473,9 +484,9 @@ def run_reconstruction(
 
         # Update temperature if using OneHotReconstruction
         if isinstance(strategy, OneHotReconstruction):
-            strategy.update_temperature()
-            # if k>250:
-                # strategy.update_temperature()
+            # strategy.update_temperature()
+            if k>500:
+                strategy.update_temperature()
             # else:
             #     strategy.weights = strategy.weights.at[:].set(strategy.V)
         # Log loss values
@@ -592,8 +603,10 @@ if __name__ == "__main__":
         U = jnp.clip(U, 0, None)
         V = jnp.clip(V, 0, None)
         # make U and V random
-        # U = jax.random.normal(jax.random.PRNGKey(0), U.shape) * 1e-6
-        # V = jax.random.normal(jax.random.PRNGKey(0), V.shape) * 1e-6
+        if config["reconstruction"]["random_init"]:
+            U = U +jax.random.normal(jax.random.PRNGKey(0), U.shape) * 1e-2
+            U = jnp.clip(U, 0, None)
+            V = jax.random.normal(jax.random.PRNGKey(0), V.shape) * 1e-6
     else:
         U = V = W = Y = X = None
 

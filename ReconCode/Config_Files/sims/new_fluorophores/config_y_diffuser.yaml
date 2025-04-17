@@ -1,0 +1,36 @@
+calibration:
+  calibration_wavelengths_file: wavelengths_2024-02-23.npy
+  filter_cube_file: spectral_filter_2024-02-23.npy
+  folder_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Calibration_data
+  psf_name: ../Figure_Notebooks/sim_data/diffuser/psf.npy
+data:
+  datafolder: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Figure_Notebooks/sim_data_2/diffuser
+  sample: diffuser
+measurement_processing:
+  bits: 16
+  crop_indices:
+  - 600
+  - 1200
+  - 1400
+  - 2000
+  downsample_factor: 1
+  wvmax: 800
+  wvmin: 450
+  wvstep: 6
+reconstruction:
+  kmax: 2000 
+  lamtv: 2.0e-04
+  rank: 4
+  step_size: 0.1
+  thr: 6.0e-05
+  xytv: 0
+  use_low_rank: true
+  use_one_hot: true
+  temperature_decay: 0.999
+  random_init: true
+wandb:
+  kprint: 100
+  project_name: HyperSpectralDiffuserScope
+  run_name: diffuser
+  save_frequency: 1000000.0
+  save_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Figure_Notebooks/sim_data_2/diffuser

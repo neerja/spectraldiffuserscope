@@ -27,6 +27,7 @@ reconstruction:
   use_one_hot: true
   temperature_decay: 0.999
   xytv: 5.0e-4
+  random_init: true
 wandb:
   kprint: 50
   project_name: FinalPaperRecons
