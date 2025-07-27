@@ -172,7 +172,7 @@ def sumFilterArray(filterstack, wv, wvmin, wvmax, wvstep):
     wvnew = np.arange(wvmin, wvmax + wvstep, wvstep)
     
     # Find the first matching index in the wavelength array
-    j0 = np.where(wvnew[0] == wv)[0][0]
+    j0 = np.argmin(np.abs(wv - wvnew[0]))
     
     # Get dimensions of the filter stack
     dim0, dim1, dim2 = filterstack.shape
@@ -181,17 +181,27 @@ def sumFilterArray(filterstack, wv, wvmin, wvmax, wvstep):
     msum = np.zeros((len(wvnew), dim1, dim2))
 
     # Resample and sum filterstack based on the wavelength intervals
-    for k in range(len(wvnew)):
-        if k < len(wvnew) - 1:
-            j1 = np.where(wvnew[k + 1] == wv)[0][0]
-        else:
-            j0 = np.where(wvmax == wv)[0][0]  # Handle the last index
-            j1 = np.where(wvmax + wvstep == wv)[0][0]
-        
+    for k in range(len(wvnew)-1):
+        j1 = np.argmin(np.abs(wv - wvnew[k + 1]))
         # Sum the filterstack over the specified wavelength range
         msum[k, :, :] = np.sum(filterstack[j0:j1, :, :], axis=0)
         j0 = j1
+    # handle the last channel
+    k = len(wvnew)-1
+    j1 = np.argmin(np.abs(wv - (wvmax+wvstep)))
+    msum[k, :, :] = np.sum(filterstack[j0:j1+1, :, :], axis=0)
 
+    # # Resample and sum filterstack based on the wavelength intervals
+    # for k in range(len(wvnew)):
+    #     if k < len(wvnew) - 1:
+    #         j1 = np.where(wvnew[k + 1] == wv)[0][0]
+    #     else:
+    #         j0 = np.where(wvmax == wv)[0][0]  # Handle the last index
+    #         j1 = np.where(wvmax + wvstep == wv)[0][0]
+        
+    #     # Sum the filterstack over the specified wavelength range
+    #     msum[k, :, :] = np.sum(filterstack[j0:j1, :, :], axis=0)
+    #     j0 = j1
     return msum
 
 def importTiff(datafolder, fname):

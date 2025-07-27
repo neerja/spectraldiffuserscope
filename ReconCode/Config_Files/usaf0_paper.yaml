@@ -34,4 +34,4 @@ wandb:
   project_name: FinalPaperRecons
   run_name: USAF_0
   save_frequency: 100
-  save_location: /home/emarkley/Workspace/PYTHON/spectraldiffuserscope/Results
+  save_location: /home/neerja/CODE/SpectralDiffuserScopeGitRepo/PlottingCode/Results/Testing

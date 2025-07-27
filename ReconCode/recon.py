@@ -321,7 +321,7 @@ class OneHotReconstruction(LowRankReconstruction):
 
         sparsity_loss = jnp.linalg.norm(jax.nn.softmax(V / temperature, axis=0) * weights, 1)
 
-        return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss + div_loss*1
+        return data_loss + lamtv * lamtv_loss + xytv * tv_loss + thr * sparsity_loss + div_loss*10
 
     def compute_loss_and_grad(self, meas, hfftpad, m, thr, xytv, lamtv):
         """
@@ -612,9 +612,11 @@ if __name__ == "__main__":
     if config["reconstruction"]["use_one_hot"]:
         temperature_decay = config["reconstruction"].get("temperature_decay", 0.999)
         temperature_delay = config["reconstruction"].get("temperature_delay", 0)
+        temperature_init = config["reconstruction"].get("temperature_init", 1)
     else:
         temperature_decay = None
         temperature_delay = None
+        temperature_init = None
 
     # Initialize the optimizer
     optimizer_other = optax.adam(learning_rate=config["reconstruction"]["step_size"])
@@ -635,7 +637,7 @@ if __name__ == "__main__":
     strategy = get_reconstruction_strategy(
         config["reconstruction"]["use_low_rank"],
         config["reconstruction"]["use_one_hot"],
-        xk=xk, U=U, V=V, W=W, Y=Y, X=X, weights=None, temperature=1, temperature_decay=temperature_decay,
+        xk=xk, U=U, V=V, W=W, Y=Y, X=X, weights=None, temperature=temperature_init, temperature_decay=temperature_decay,
         optimizer_other=optimizer_other, optimizer_U=optimizer_U
     )
 
